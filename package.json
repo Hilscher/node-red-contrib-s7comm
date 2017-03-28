@@ -1,0 +1,33 @@
+{
+    "name": "node-red-contrib-s7comm",
+    "version": "1.0.0",
+    "description": "A Node-RED node to communicate with Siemens S7 PLCs.",
+    "main": "s7comm.js",
+    "author": {
+        "name": "SE",
+        "departement": "netAUTOMATION",
+        "company": "Hilscher Gesellschaft fuer Systemautomation mbH",
+        "email": "info@hilscher.com",
+        "url": "http://www.hilscher.com",
+        "telephone": "+49 6190 9907 0",
+        "address": {
+            "street": "Rheinstrasse 15",
+            "city": "Hattersheim",
+            "state":  "",
+            "country": "Germany",
+            "zip": "65795",
+            "additionalInformation":  "close to airport frankfurt"
+        }
+    },
+    "dependencies": {
+        "nodes7": "~0.1.13",
+        "locks": "~0.2.2"
+    },
+    "keywords":["node-red","SIMATIC","PLC","Siemens","S7","RFC1006","iso-on-tcp"],
+    "node-red"      : {
+        "nodes"     : {
+            "s7comm": "s7comm.js"
+        }
+    },
+    "license": "MIT"
+}

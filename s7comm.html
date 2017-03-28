@@ -1,0 +1,778 @@
+<!-- **********************************************************************************
+Copyright (c) 2017 Hilscher Gesellschaft fuer Systemautomation mbH.
+See LICENSE
+***************************************************************************************
+Description:
+A Node-RED node to communicate with Siemens S7 PLCs.
+**************************************************************************************-->
+
+<style>
+	.node-config-input-innerRow {
+       text-align: left;
+    }
+	.inject-time-row {
+        padding-left: 110px;
+    }
+    .inject-time-row select {
+        margin: 3px 0;
+    }
+    .inject-time-row > .ui-spinner {
+        height: 28px;
+        margin: 3px 0;
+        border-color: rgb(204, 204, 204);
+    }
+    .inject-time-count {
+        width: 40px !important;
+    }
+</style>
+
+<!--******************************************************************-->
+<!--  	     global functions to create a List within selectBox	      -->
+<!--******************************************************************-->
+<input type="hidden" id="tmpList">
+
+<script type="text/javascript">
+
+var nodeHandle;
+
+/**
+ * @description creates a random string which will be used as an random id
+ * @param {length} length of the string
+ * @example randomString(8) //creates for example VwHyC5Tr
+*/
+function randomString(length) {
+    var chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXTZabcdefghiklmnopqrstuvwxyz'.split('');
+    if (! length) {
+        length = Math.floor(Math.random() * chars.length);
+    }
+    var str = '';
+    for (var i = 0; i < length; i++) {
+        str += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return str;
+}
+
+/**
+ * @description check if IP ipaddress is valid
+ * @param {ipaddress} IP-V4 Address
+ * @return {bool} true if ip valid else false
+*/
+function ValidateIPV4address  (ipaddress) {
+	if (/^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/.test(ipaddress)){  
+		return (true);
+	}else{
+		return (false);
+	}
+}
+
+/**
+ * @description Creates the actual list
+ * @param {Object} myNode - A node object within the HTML-File
+ * @param {String} globList- The signal list
+ */
+function createList(myNode,globList){
+	if(globList==undefined || myNode==undefined){
+		//RED.notify(node._("common.notification.error",{message:node._("Fatal Error")}),"error");
+	}else{
+		myNode.globallist=JSON.parse(globList);
+		var myArray=[{myId:"undefined",v:"undefined",t:"Select a Signal"}];
+		for (var i=0;i<myNode.globallist.items.length;i++) {
+			var dataset= myNode.globallist.items[i];
+				myArray.push({	// show t, send v
+					    myId:dataset.S7_itemID.toString(),
+                        v:{	"S7_Type":dataset.S7_Type.toString(),
+							"S7_DBnum":dataset.S7_DBnum.toString(),
+							"S7_Datatype":dataset.S7_Datatype.toString(),
+							"S7_Offset":dataset.S7_Offset.toString(),
+							"S7_BitOffset":dataset.S7_BitOffset.toString(),
+							"S7_Quantity":dataset.S7_Quantity.toString(),
+							"S7_Name":dataset.S7_Name.toString()
+                        },
+						t:dataset.S7_Name.toString()
+				});						
+		}
+		//create Array in selectbox
+		$("#node-input-selectsymbol").empty();			
+		for (var i in myArray) {
+		    $("#node-input-selectsymbol").append($("<option></option>").attr('id', myArray[i].myId).val(JSON.stringify(myArray[i].v)).text((myArray[i].t)));
+        }
+		//mark the selected item to find it the next time
+		$("#node-input-selectsymbol option").filter(function() {return $(this).val() == myNode.payload;}).attr('selected',true);
+        
+        //save the S7 Name
+        myNode.payload=$("#node-input-selectsymbol option:selected").val();
+        //myNode.s7Name=$("#node-input-selectsymbol option:selected").text();
+
+        $("#node-input-selectsymbol").change(function() {
+			$("#node-input-payload").val($("#node-input-selectsymbol option:selected").val());
+			myNode.s7Name=$("#node-input-selectsymbol option:selected").text();
+			$("#node-input-selectsymbol option").filter(function() {return $(this).val() == myNode.payload;}).attr('selected',true);
+		});
+	}
+};
+
+/**
+ * @description Looks if a list content is available and if its valid
+ * @param {Object} myNode - A node object within the HTML-File
+ * @param {Number|String} val- ID of the configuration	
+ */
+function createSignalList(myNode,ID){
+	if(ID ==="_ADD_"){														//The ID is either a number or "_ADD_"
+		createList(myNode,JSON.stringify({"items":[]})); 					//create an empty list because no Configuration is choosed
+	}else{
+		var configData=RED.nodes.node(ID); 									//node-content by reference to an node id	
+		var globListVal_srv=JSON.stringify({"items":configData.payload});
+		if(globListVal_srv.length <= 12){									//emptyString={"items":[]} => length=12
+			createList(myNode,JSON.stringify({"items":[]}));				//create an empty list because List is empty
+		}else{							
+			createList(myNode,globListVal_srv);								// create a new local List
+		}
+	}	
+};
+</script>
+
+
+<!--******************************************************************-->
+<!--  			    		 Read Node			     				  -->
+<!--******************************************************************-->
+<script type="text/x-red" data-template-name="s7comm read">
+	<!-- Element: Connection -->
+	<div class="form-row">
+        <label for="node-input-connection"><i class="fa fa-globe"> </i> Connection</label>
+		<input type="text" id="node-input-connection">
+    </div>
+	<!-- Element: Signal -->
+	<div class="form-row">
+		<label for="node-input-selectsymbol"><i class="fa fa-envelope"></i> Signal</label>
+		<select id="node-input-selectsymbol" style="width: 73%"></select>
+    </div>
+	<!-- Element: Intervall -->
+    <div class="form-row">
+        <label for=""><i class="fa fa-repeat"></i> <span data-i18n="inject.label.repeat"></span></label>
+        <select id="inject-time-type-select" style="width: 73%">
+            <option value="none" data-i18n="inject.none"></option>
+            <option value="interval" data-i18n="inject.interval"></option>
+        </select>
+        <input type="hidden" id="node-input-none">
+        <input type="hidden" id="node-input-repeat">
+    </div>
+    <div class="form-row inject-time-row hidden" id="inject-time-row-interval">
+        <span data-i18n="inject.every"></span>
+        <input id="inject-time-interval-count" class="inject-time-count" value="1"></input>
+        <select style="width: 100px" id="inject-time-interval-units">
+            <option value="s" data-i18n="inject.seconds"></option>
+            <option value="m" data-i18n="inject.minutes"></option>
+            <option value="h" data-i18n="inject.hours"></option>
+        </select><br/>
+    </div>
+    <div class="form-row" id="node-once">
+        <label>&nbsp;</label>
+        <input type="checkbox" id="node-input-once" style="display: inline-block; width: auto; vertical-align: top;">
+        <label for="node-input-once" style="width: 70%;" data-i18n="inject.onstart"></label>
+    </div>
+	<!-- Element: Topic -->
+    <div class="form-row">
+        <label for="node-input-topic"><i class="fa fa-tasks"></i> Topic</label>
+        <input type="text" id="node-input-topic" placeholder="Topic">
+    </div>		
+	<!-- Element: name -->
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>	
+	<!-- hidden variables, to exchange values between server- and client-side -->	
+	<input type="hidden" id="node-input-payload">	<!--  local value is saved in here-->	
+	<input type="hidden" id="node-input-payloadRead">	<!--  local value is saved in here-->	
+</script>
+
+<script type="text/x-red" data-help-name="s7comm read">
+<p>The node reads data from Siemens devices such as S7-300/400/1200/1500.</p>
+<p>The signals to be read are setup in the node's connection selector. The repeat function allows sending 
+requests either periodically or if disabled triggered by any node's input message.
+The node outputs a msg.payload in the following format:</p>
+<p style="padding-left: 10px;"><b>payload.signal :</b> Symbolic name of the signal as configured,</p>
+<p style="padding-left: 10px;"><b>payload.path :</b> Signal path of the signal,</p>
+<p style="padding-left: 10px;"><b>payload.error :</b> Error value: 0 = no error, -1 = reading failed ,</p>
+<p style="padding-left: 10px;"><b>payload.value :</b> Read data as array. The returned data can be either:</p>
+<p style="padding-left: 30px;"><em>null</em>: in case of an error;</p>
+<p style="padding-left: 30px;"><em>single value</em>: if the quantity equals to one;</p>
+<p style="padding-left: 30px;"><em>array of values</em>: if the quantity is larger than one;</p>
+</br></br>
+Example payload of output msg:</br>
+1) Reading Q0.1, return value is true and valid:</br>
+<div style="padding-left: 17px;"> {topic:"Input_hall#1", payload:{signal: "machine#1", path:"Q0.1",error:0, value:[true] }, _msgid: "92e3f0cc.6d1c1"} </div></br>
+2) Reading QB1, return value is 100 and valid:</br>
+<div style="padding-left: 17px;"> {topic:"Input_hall#1", payload:{signal: "machine#1", path:"QB1",error:0, value:[100] }, _msgid: "92e3f0cc.6d1c1"} </div></br>
+3) Reading QB0-QB3, return value is [1,2,3,4] and valid:</br>
+<div style="padding-left: 17px;"> {topic:"Input_hall#1", payload:{signal: "machine#1", path:"QB0..3",error:0, value:[1,2,3,4] }, _msgid: "92e3f0cc.6d1c1"} </div></br>
+4) Reading DB11.DBB0 - DB11.DBB3, return value is [null,null,null,null] and invalid because DB11 does not exist:</br>
+<div style="padding-left: 17px;"> {topic:"Input_hall#1", payload:{signal: "machine#1", path:"DB10,BYTE0..3",error:-1, value:[null,null,null,null] }, _msgid: "92e3f0cc.6d1c1"} </div></br>
+5) In any case of Error:  </br> 
+<div style="padding-left: 17px;"> error=-1, value=[null] </div></br>
+</script>
+
+<script type="text/javascript">
+RED.nodes.registerType('s7comm read',{
+		category: 'input',
+		color:"#009999",
+		defaults: {
+			connection: {type:"s7comm", required:true},
+			globallist: {value:""},
+			payload: {value:""},
+            s7Name: {value:""},
+			topic: {value:""},
+			name: {value:""},
+			signalSetted: {value:false},
+			none:{value:false},
+			repeat: {value:""},
+			once: {value:false}
+		},
+		inputs:1,
+		outputs:1,
+		icon: "fieldbus.png",
+		paletteLabel:"s7comm", 
+		label: function() {return this.name||this.topic||"s7comm:read";},
+		labelStyle: function() {return this.name?"node_label_italic":"";},
+		oneditprepare: function() {
+			var node=this;
+			nodeHandle=this;
+			
+			//Always create the select List when the dialog box is getting opened!
+			createSignalList(node,$("#node-input-connection option:selected").val());
+			
+            //Creates a new List when another Connection is getting selected
+			$("#node-input-connection").change(function(){
+				createSignalList(node,$("#node-input-connection option:selected").val());
+			});	
+
+			//$("#node-input-selectsymbol").change(function() {});
+	
+			//Intervall-functionality
+			$("#inject-time-type-select").change(function() {
+                var id = $("#inject-time-type-select option:selected").val();
+                $(".inject-time-row").hide();
+                $("#inject-time-row-"+id).show();
+                if ((id == "none") || (id == "interval")) {
+                    $("#node-once").show();
+                }else {
+                    $("#node-once").hide();
+                    $("#node-input-once").prop('checked', false);
+                }
+            });
+            $(".inject-time-count").spinner({min:1});
+            $("#inject-time-interval-units").change(function() {
+                var units = $("#inject-time-interval-units option:selected").val();
+            });
+            $.widget( "ui.injecttimespinner", $.ui.spinner,{
+                options: {
+                    // seconds
+                    step: 60 * 1000,
+                    // hours
+                    page: 60
+                },
+                _parse: function( value ) {
+                    if ( typeof value === "string" ) {
+                        // already a timestamp
+                        if ( Number( value ) == value ) {
+                            return Number( value );
+                        }
+                        var p = value.split(":");
+                        var offset = new Date().getTimezoneOffset();
+                        return ((Number(p[0])*60)+Number(p[1])+offset)*60*1000;
+
+                    }
+                    return value;
+                },
+                _format: function( value ) {
+                    var d = new Date(value);
+                    var h = d.getHours();
+                    var m = d.getMinutes();
+                    return ((h < 10)?"0":"")+h+":"+((m < 10)?"0":"")+m;
+                }
+            });
+            $("#inject-time-time").injecttimespinner();
+            var repeattype = "none";
+            if (this.repeat != "" && this.repeat != 0) {
+                repeattype = "interval";
+                var r = "s";
+                var c = this.repeat;
+                if (this.repeat % 60 === 0) { r = "m"; c = c/60; }
+                if (this.repeat % 1440 === 0) { r = "h"; c = c/60; }
+                $("#inject-time-interval-count").val(c);
+                $("#inject-time-interval-units").val(r);
+            }else{
+                $("#inject-time-type-select option").filter(function() {return $(this).val() == "none";}).attr('selected',true);
+            }
+            $(".inject-time-row").hide();
+            $("#inject-time-type-select option").filter(function() {return $(this).val() == repeattype;}).attr('selected',true);
+            $("#inject-time-row-"+repeattype).show();
+            $("#inject-time-type-select").change();
+		},
+        oneditsave: function() {
+		    nodeHandle=null;
+
+			//PART: Intervall functionality
+            var none=false;
+		    var repeat = "";
+            var type = $("#inject-time-type-select option:selected").val();      
+            if (type == "none") {
+                none=true;
+            } else if (type == "interval") {
+                var count = $("#inject-time-interval-count").val();
+                var units = $("#inject-time-interval-units option:selected").val();
+                if (units == "s") {
+                    repeat = count;
+                } else if (units == "m") {
+                    repeat = count * 60;
+                } else if (units == "h") {
+                     repeat = count * 60 * 60;
+                }
+            }
+            $("#node-input-none").val(none);
+            $("#node-input-repeat").val(repeat);
+		},
+		oneditcancel: function(){
+			nodeHandle=null;
+		}
+    });
+</script>
+
+
+
+<!--******************************************************************-->
+<!--  			    		 Write Node			     				  -->
+<!--******************************************************************-->
+<script type="text/x-red" data-template-name="s7comm write">
+	<!-- Element: Connection -->
+	<div class="form-row">
+        <label for="node-input-connection"><i class="fa fa-globe"> </i> Connection</label>
+		<input type="text" id="node-input-connection">
+    </div>
+	<!-- Element: Signal -->
+	<div class="form-row">
+		<label for="node-input-selectsymbol"><i class="fa fa-envelope"></i> Signal</label>
+		<select id="node-input-selectsymbol" style="width: 73%"></select>
+    </div>	
+	<!-- Element: Topic -->
+    <div class="form-row">
+        <label for="node-input-topic"><i class="fa fa-tasks"></i> Topic</label>
+        <input type="text" id="node-input-topic" placeholder="Topic">
+    </div>		
+	<!-- Element: name -->
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>		
+	<!-- hidden variables, to exchange values between server- and client-side -->	
+	<input type="hidden" id="node-input-payload">		 <!--  local value is saved in here-->
+	<input type="hidden" id="node-input-payloadWrite">	<!--  local value is saved in here-->	
+</script>
+
+<script type="text/x-red" data-help-name="s7comm write">
+<p>The node writes data to Siemens devices such as S7-300/400/1200/1500.</p>
+<p>The signals to be written are setup in the node's connection selector. To write a value 
+input a message with msg.payload <em>value</em> as JSON object of type array:</p>
+<p style="padding-left: 17px;"><b> {"value":[42]}</b> </p>
+<p>The node outputs a msg.payload in the following format to confirm the write command:</p>
+<p style="padding-left: 17px;"><b>payload.signal :</b> Symbolic name of the signal as configured,</p>
+<p style="padding-left: 17px;"><b>payload.path :</b> Signal path of the signal,</p>
+<p style="padding-left: 17px;"><b>payload.error :</b> Error value: 0 = no error, -1 = writing failed,</p>
+<p style="padding-left: 17px;"><b>payload.value :</b> Value to be written</p>
+</br></br>
+Example payload of output msg:</br>
+1) Writing true to I0.3, writing succeeded, Error equals to 0:</br>
+<div style="padding-left: 17px;">{topic:"Input_hall#1", payload:{signal: "machine#1", path:"I0.3",error:0, value:[true] }, "_msgid": "92e3f0cc.6d1c1"} </div></br>
+2) Writing 8 to IB1, writing succeeded, Error equals to 0:</br>
+<div style="padding-left: 17px;">{{topic:"Input_hall#1", payload:{signal: "machine#1", path:"IB1",error:0, value:[8] }, "_msgid": "92e3f0cc.6d1c1"} </div></br>
+3) Writing [1,2,3] to IB1-IB3, writing succeeded, Error equals to 0:</br>
+<div style="padding-left: 17px;">{{topic:"Input_hall#1", payload:{signal: "machine#1", path:"IB1..3",error:0, value:[1,2,3]}, _msgid: "92e3f0cc.6d1c1"} </div></br>
+4) Writing 8 to IB1, Writing failed, Error equals to -1:</br>
+<div style="padding-left: 17px;">{{topic:"Input_hall#1", payload:{signal: "machine#1", path:"IB1",error:-1, value:[8]}, _msgid: "92e3f0cc.6d1c2"} </div></br>
+</script>
+
+<script type="text/javascript">
+RED.nodes.registerType('s7comm write',
+{		category: 'output',
+        color:"#009999",
+		defaults: {
+			connection: {type:"s7comm", required:true},
+			globallist: {value:""},
+			payload: {value:""},
+            s7Name: {value:""},
+            topic: {value:""},
+			name: {value:""},
+			signalSetted: {value:false}
+		},
+		inputs:1,
+        outputs:1,
+		align: "right",
+        icon: "fieldbus.png",
+		paletteLabel:"s7comm", 
+        label: function() {return this.name||this.topic||"s7comm:write";},
+        labelStyle: function() {return this.name?"node_label_italic":"";},
+		oneditprepare:  function() {
+			var node=this;
+			nodeHandle=this;				
+
+			//Always create the select List when the dialog box is getting opened!
+			createSignalList(node,$("#node-input-connection option:selected").val());
+			
+			//Creates a new List when another Connection is getting selected
+			$("#node-input-connection").change(function(){
+				createSignalList(node,$("#node-input-connection option:selected").val());
+			});
+			
+			//$("#node-input-selectsymbol").change(function() {});
+		},        
+		oneditsave: function() {
+			nodeHandle=null;
+		},
+		oneditcancel: function() {
+			nodeHandle=null;
+		}
+    });
+</script>
+
+
+
+<!--******************************************************************-->
+<!--  			     Configuration Node			     				  -->
+<!--******************************************************************-->
+<script type="text/x-red" data-template-name="s7comm">  
+	
+	<div class="form-row well">
+		<center><b style="font-size:14px">Connection parameter</b><br></br></center>
+		<!-- Element: ip,port,Rack,Slot-->
+		<div class="form-row">
+			<label for="node-config-input-ip" >IP-Adress:</label>
+			<input class="input-append-left" type="text" id="node-config-input-ip" placeholder="localhost" style="width: 40%;" >     
+			<label for="node-config-input-port" style="margin-left: 10px; width: 35px; "> Port:</label>
+			<input class="input-append-left" type="text" id="node-config-input-port" placeholder="102" style="width:10%">	
+		</div>
+		<div class="form-row">
+			<label for="node-config-input-rack"> Rack:</label>
+			<input class="input-append-left" type="text" id="node-config-input-rack" placeholder="0" style="width: 40%;" >
+			<label for="node-config-input-slot" style="margin-left: 10px; width: 35px; "> Slot:</label>
+			<input class="input-append-left" type="text" id="node-config-input-slot" placeholder="2" style="width:10%">
+		</div>
+    </div>
+	<hr></hr> <!-- horizontal Line-->
+	<div>Signals: </div>	
+	<!-- Element: Box-->
+	<div class="form-row node-config-input-payload-container-row" style="margin-bottom: 0px;">
+        <div id="node-config-input-payload-container-div" style="box-sizing: border-box; border-radius: 5px; height: 310px; padding: 5px; border: 1px solid #ccc; overflow-y:scroll;">
+            <ol id="node-config-input-payload-container" style=" list-style-type:none; margin: 0;"></ol>
+        </div>
+    </div>
+	<!-- Element: Button-->
+    <div class="form-row">
+        <a href="#" class="btn btn-mini" id="node-config-input-add-data" style="margin-top: 4px;"><i class="fa fa-plus"></i> signal</a>
+    </div>
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('s7comm',{
+        category: 'config',
+        defaults: {
+			ip: {value:"192.168.0.1",required:true},
+            port: {value:"102",required:true,validate:RED.validators.number()},
+			rack: {value:"0",required:true,validate:RED.validators.number()},
+			slot: {value:"2",required:true,validate:RED.validators.number()},
+			payload: {value:[{S7_Type:"" ,S7_DBnum:"0",S7_Datatype:"",S7_Offset:"0",S7_BitOffset:"0",S7_Quantity:"1",S7_Name:""}]},
+			globallist: {value:""}
+        },
+        label: function() {return this.ip+":"+this.port;},
+        labelStyle: function() {return this.name?"node_label_italic":"";},
+		oneditprepare: function() {
+			var node=this;
+			
+			//clone the payload for tmp saving of the content, now a changing of payload hasn't got an effect to the clone
+			node.globallist = JSON.parse(JSON.stringify(node.payload));
+
+			//v=send to JS  , t=shown in HTML
+			var operators = [{v:"I",t:"Input"},{v:"Q",t:"Output"},{v:"M",t:"Marker"},{v:"DB",t:"Datablock"},{v:"T",t:"Timer"},{v:"C",t:"Counter"},{v:"PI",t:"Peripheral Input"},{v:"PQ",t:"Peripheral Output"}];
+			var operators2 = [
+				{v:"X",t:"Bit"},
+				{v:"B",t:"Byte"},
+				{v:"W",t:"Word"},
+				{v:"D",t:"DWord"},
+				{v:"I",t:"Int"},
+				{v:"DI",t:"DInt"},
+				{v:"uint8",t:"uint8"},
+				{v:"uint16",t:"uint16"},
+				{v:"uint32",t:"uint32"},
+				{v:"int16",t:"int16"},
+				{v:"int32",t:"int32"},	
+				{v:"R",t:"Real"},
+				{v:"CHAR",t:"Char"},
+				{v:"STRING",t:"S7-String"},
+				//{v:"TIMER",t:"Timer"},			
+				//{v:"COUNTER",t:"Counter"}
+				//not supported within NodeS7
+				//{v:"S5TIME",t:"S5TIME"},
+				//{v:"TIME",t:"TIME"},
+				//{v:"DATE",t:"Date"},
+				//{v:"TOD",t:"Time_Of_Day"}
+			];
+			var operators3 = [{v:"0",t:"0"},{v:"1",t:"1"},{v:"2",t:"2"},{v:"3",t:"3"},{v:"4",t:"4"},{v:"5",t:"5"},{v:"6",t:"6"},{v:"7",t:"7"}]; 
+		
+			function generateDataset(i,data) { 			
+                var container = $('<li/>',{id:randomString(8),style:"background: #fff; margin:0; padding:8px 0px; border-bottom: 1px solid #ccc;"});
+				var row = $('<div/>',{style:"margin-left: 20px; text-align: left;"}).appendTo(container);
+				//S7_Type
+                var FieldRow1 = $("<select/>",{class:"node-config-input-Row",title: "S7-Type",id:"node-config-input-Row1_"+i.toString(),style:"width:10%; margin-left: 5px; text-align: center;"}).appendTo(row);
+                for (var d in operators) {FieldRow1.append($("<option></option>").val(operators[d].v).text(operators[d].t));}
+				//S7_DBnum	
+				var DBNum = $('<span/>',{style:"display:inline-block;; font-size: 15px;vertical-align: -2px; margin-left: 5px;"}).text("Num:").appendTo(row);
+				var FieldRow2 = $('<input/>',{class:"ui-spinner-input",title: "DB-Number",id:"node-config-input-Row2_"+i.toString(),style:"display:inline-block; width:10% ; margin-right:.4em; text-align: center;",type:"text"}).spinner(
+				{icons: { down: "ui-icon-triangle-1-n", up: "ui-icon-triangle-1-s" }}).appendTo(row);
+				//S7_Datatype			
+                var FieldRow3 = $("<select/>",{class:"node-config-input-Row",title: "Datatype",id:"node-config-input-Row3_"+i.toString(),style:"width:10%; margin-left: 5px; text-align: center;"}).appendTo(row);
+                for (var d in operators2) {FieldRow3.append($("<option></option>").val(operators2[d].v).text(operators2[d].t));}
+				//S7_Offset
+                var Offset = $('<span/>',{style:"display:inline-block;; font-size: 15px;vertical-align: -2px; margin-left: 5px;"}).text("Offset:").appendTo(row);
+				var FieldRow4 = $('<input/>',{class:"ui-spinner-input",title: "Offset",id:"node-config-input-Row4_"+i.toString(),style:"display:inline-block; width:10% ; margin-right:.4em; text-align: center;",type:"text"}).spinner(
+				{icons: { down: "ui-icon-triangle-1-n", up: "ui-icon-triangle-1-s" }}).appendTo(row);
+				//S7_BitOffset				
+                var dot = $('<span/>',{style:"display:inline-block; font-size: 30px; ; vertical-align: -10px"}).text(".").appendTo(row);
+				var FieldRow5 = $("<select/>",{class:"node-config-input-Row",title: "Bit-Offset",id:"node-config-input-Row5_"+i.toString(),style:"width:10%; margin-left: 5px; text-align: center;"}).appendTo(row);
+                for (var d in operators3) {FieldRow5.append($("<option></option>").val(operators3[d].v).text(operators3[d].t));}
+				//S7_Quantity
+				var Quantity = $('<span/>',{style:"display:inline-block;; font-size: 15px;vertical-align: -2px; margin-left: 5px;"}).text("Quantity:").appendTo(row);
+            	var FieldRow6 = $('<input/>',{class:"ui-spinner-input",title: "Quantity",id:"node-config-input-Row6_"+i.toString(),style:"display:inline-block; width:10% ; margin-right:.4em; text-align: center; ",type:"text",value:1}).spinner(
+            	{icons: { down: "ui-icon-triangle-1-n", up: "ui-icon-triangle-1-s" }}).appendTo(row);
+				//S7_Name				
+                var FieldRow7 = $('<input/>',{class:"node-config-input-Row",title: "Name",id:"node-config-input-Row7_"+i.toString(),style:"width: 100px; text-align: left; margin-left:.4em;",type:"text",placeholder:"Name"}).appendTo(row);
+				//delete Item
+				var finalspan = $('<span/>',{style:"float: right; margin-top: 3px;margin-right: 10px;"}).appendTo(row);
+                //finalspan.append(':<span class="node-config-input-payload-index">'+i+'</span> ');
+                var deleteButton = $('<a/>',{href:"#",class:"btn btn-mini", style:""}).appendTo(finalspan);
+                $('<i/>',{class:"fa fa-remove"}).appendTo(deleteButton);
+				$("#node-config-input-payload-container").append(container);
+
+				deleteButton.click(function() {
+					container.css({"background":"#fee"});
+					container.fadeOut(300, function() {
+						$(this).remove();// remove item of container
+						$("#node-config-input-payload-container").children().each(function(indexJ,element) {//get all elements of current container
+							indexJ=indexJ+1;//start with index 1
+							$(element).children().children().not("span","a").each(function(indexI,element){//get all child except span and a
+									indexI=indexI+1;
+									$(element).prop('id', 'node-config-input-Row'+indexI+'_' + indexJ);//change the ids
+							});							
+						});
+					});
+				});
+
+				//save values:  
+                FieldRow1.find("option").filter(function(){return $(this).val() == data.S7_Type;}).attr('selected',true); //set atrribut selected=selected to choosen value
+				FieldRow2.val(data.S7_DBnum);//value attribut in textfeld mit data.v setzen
+				FieldRow3.find("option").filter(function(){return $(this).val() == data.S7_Datatype;}).attr('selected',true);
+				FieldRow4.val(data.S7_Offset);
+				FieldRow5.find("option").filter(function(){return $(this).val() == data.S7_BitOffset;}).attr('selected',true);
+				FieldRow6.val(data.S7_Quantity);
+				FieldRow7.val(data.S7_Name);
+
+				//dynamic change of S7-Type selectbox (FieldRow1) and Datatype selectbox (FieldRow3) 
+				FieldRow1.change(function() {
+					var f1=FieldRow1.children("option:selected").val();
+					var f3=FieldRow3.children("option:selected").val();	
+                    
+                    dot.hide();
+				    FieldRow5.hide();
+					Quantity.show();
+					FieldRow6.show();
+
+                    switch(f1) {
+						case "E":
+						case "I":
+						case "A":
+						case "Q":
+						case "M":
+                        case "PI":
+						case "PQ":{
+								DBNum.hide();
+								FieldRow2.hide();
+								FieldRow3.show();
+								Offset.show();
+								FieldRow4.show();
+								if(f3==="X"){
+									dot.show();
+									FieldRow5.show();
+									Quantity.hide();
+									FieldRow6.hide();
+								}else if(f3==="CHAR"){
+									dot.hide();
+									FieldRow5.hide();
+									Quantity.hide();
+									FieldRow6.hide();
+								}			
+								break;
+							}
+						case "DB":{
+								DBNum.show();
+								FieldRow2.show();
+								FieldRow3.show();
+								Offset.show();
+								FieldRow4.show();
+								if(f3==="X"){
+									dot.show();
+									FieldRow5.show();
+									Quantity.hide();
+									FieldRow6.hide();
+								}else if(f3==="CHAR"){
+									dot.hide();
+									FieldRow5.hide();
+									Quantity.hide();
+									FieldRow6.hide();
+								}					
+								break;
+							}
+						case "T":
+						case "C":{
+								DBNum.hide();
+								FieldRow2.hide();
+								FieldRow3.hide();
+								Offset.show();
+								FieldRow4.show();
+								dot.hide();
+								FieldRow5.hide();
+								Quantity.hide();
+								FieldRow6.hide();
+								break;
+							}                 						
+						default:{ 	}
+					}
+				});	
+				FieldRow3.change(function() {
+					var f3=FieldRow3.children("option:selected").val();
+					
+					switch(f3) {
+						case "X":
+							dot.show();
+							FieldRow5.show();
+							Quantity.hide();
+							FieldRow6.hide();
+							break;
+						case "B":
+						case "W":
+						case "D":
+						case "I":
+						case "DI":
+                        case "uint8":
+						case "uint16":
+						case "uint32":
+						case "int16":
+						case "int32":
+						case "STRING":
+						case "R":
+							dot.hide();
+							FieldRow5.hide();
+							Quantity.show();
+							FieldRow6.show();
+							break;
+						case "CHAR":
+							dot.hide();
+							FieldRow5.hide();
+							Quantity.hide();
+							FieldRow6.hide();
+							break;
+						default:
+							dot.hide();
+							FieldRow5.hide();
+							Quantity.hide();
+							FieldRow6.hide();
+					}
+					var f1=FieldRow1.children("option:selected").val();
+					if(f1==="T"||f1==="C"){
+							dot.hide();
+							FieldRow5.hide();
+							Quantity.show();
+							FieldRow6.show();
+					}
+					
+				});		
+				
+				FieldRow1.change();
+				FieldRow3.change();
+			}//end generateDataset
+
+			$("#node-config-input-add-data").click(function() {
+				node.payload.push({S7_Type:"" ,S7_DBnum:"0",S7_Datatype:"",S7_Offset:"0",S7_BitOffset:"0",S7_Quantity:"0",S7_Name:""}); //new data to var
+				generateDataset($("#node-config-input-payload-container").children().length+1,{S7_Type:"" ,S7_DBnum:"0",S7_Datatype:"",S7_Offset:"0",S7_BitOffset:"0",S7_Quantity:"1",S7_Name:""}); //new html-data
+				$("#node-config-input-payload-container-div").scrollTop($("#node-config-input-payload-container-div").get(0).scrollHeight);			
+			});
+			for (var i=0;i< node.payload.length;i++) {generateDataset(i+1,node.payload[i]);}
+
+			$( "#node-config-input-payload-container" ).sortable({
+                axis: "y",
+                update: function( event, ui ) {
+                    var payload = $("#node-config-input-payload-container").children();
+                    payload.each(function(i) {
+                        $(this).find(".node-config-input-payload-index").html(i+1);
+                    });
+                },
+                handle:".node-config-input-payload-handle",
+                cursor: "move"
+            });
+			$( "#node-config-input-payload-container .node-config-input-payload-handle" ).disableSelection();
+		},
+        oneditsave: function() {
+			var node=this;
+			if(!ValidateIPV4address($("#node-config-input-ip").val())){
+				alert("WARINING: INVALID IP!");
+			}
+			if( isNaN(Number($("#node-config-input-port").val()))){
+				alert("WARINING: INVALID PORT!");
+			}
+			if( isNaN(Number($("#node-config-input-rack").val()))){
+				alert("WARINING: INVALID RACK!");
+			}
+			if( isNaN(Number($("#node-config-input-slot").val()))){
+				alert("WARINING: INVALID SLOT!");
+			}
+			var payload = $("#node-config-input-payload-container").children();
+            node.payload= [];
+			payload.each(function(i) {
+                var row1x = $("#node-config-input-Row1_"+(i+1).toString()).find("option:selected").val();
+				if(row1x==""){row1x="undefined";}
+				var row2x = $("#node-config-input-Row2_"+(i+1).toString()).val();
+				if(row2x==""){row2x="undefined";}
+				var row3x = $("#node-config-input-Row3_"+(i+1).toString()).find("option:selected").val();
+				if(row3x==""){row3x="undefined";}
+				var row4x = $("#node-config-input-Row4_"+(i+1).toString()).val();
+				if(row4x==""){row4x="undefined";}
+				var row5x = $("#node-config-input-Row5_"+(i+1).toString()).find("option:selected").val();
+				if(row5x==""){row5x="undefined";}
+				var row6x = $("#node-config-input-Row6_"+(i+1).toString()).val();
+				if(row6x==""){row6x="undefined";}
+				var row7x = $("#node-config-input-Row7_"+(i+1).toString()).val();
+				if(row7x==""){row7x="undefined";}
+                node.payload.push({"S7_itemID":this.id,"S7_Type":row1x,"S7_DBnum":row2x,"S7_Datatype":row3x,"S7_Offset":row4x,"S7_BitOffset":row5x,"S7_Quantity":row6x,"S7_Name":row7x});
+			});
+
+			if(nodeHandle!= null){
+				createList(nodeHandle,JSON.stringify({"items":node.payload}));//update local list with global list as an JSON
+			}
+			node.globallist=null;  //delete clone-content
+		},
+		oneditcancel: function() {
+			var node=this;
+			if(node.globallist!=null){
+				node.payload = JSON.parse(JSON.stringify(node.globallist))	// copy old data from  clone
+				node.globallist=null; 										//delete clone-content
+			}
+		},
+        oneditresize: function(size) {
+            var rows = $("#dialog-form>div:not(.node-input-rule-container-row)");
+            var height = size.height;
+            for (var i=0;i<rows.size();i++) {
+                height -= $(rows[i]).outerHeight(true);
+            }
+            var editorRow = $("#dialog-form>div.node-input-rule-container-row");
+            height -= (parseInt(editorRow.css("marginTop"))+parseInt(editorRow.css("marginBottom")));
+            $("#node-input-rule-container").editableList('height',height);
+        }
+	});
+</script>
+
