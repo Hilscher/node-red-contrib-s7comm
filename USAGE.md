@@ -14,15 +14,15 @@
 
 The S7comm-Read sends an reading request to a sps. The responde from the PLC is at the output of the node available as soon as its arrived.The nodes reads a value from the PLC triggered internally or by an inject node.
 
-![alt text] (https://github.com/Hilscher/s7comm/blob/master/images/configuration1.JPG)
+![alt text] (https://github.com/Hilscher/s7comm/blob/master/images/configuration1.png)
 
-![alt text](images/example_readFlow02.jpg)
+![alt text](images/example_readFlow02.png)
 
 The S7comm-Write node writes an value to a Memory of an SPS. The Value is provides either from the inject Node or from an S7comm-Read node.
 
-![alt text](images/example_writeFlow01.jpg)
+![alt text](images/example_writeFlow01.png)
 
-![alt text](images/example_writeFlow02.jpg)
+![alt text](images/example_writeFlow02.png)
 
 ## <a name="configuration"></a> configuration node
 -----------
@@ -32,33 +32,33 @@ To parametrise the configuration node you have to insert either a S7comm-Read or
 
 After double clicking the node you are in the edit dialog of the S7comm node (both nodes are looking nearly the same). The following edit dialog will pop up. Here you can open the Configuration Node.
         
-![alt text](images/configuration1.jpg)
+![alt text](images/configuration1.png)
 
 
 *Open Configuration Node*
 
 The Configuration Node consists of two parts. In the first part you can edit the S7comm-Connection parameter (IP,Port,Rack,Slot). The second part is the signal box. The signal box represents a global list of your SPS. This global list is available for all reading and writing nodes. After creating a global signal list push "Add" to apply the Connection parameter and create the list for all S7comm nodes.
        
-![alt text](images/configuration2.jpg)
+![alt text](images/configuration2.png)
 
 
 *How to define an signal*
 
 I0.1: 
 
-![alt text](images/example_signal1.jpg)
+![alt text](images/example_signal1.png)
 
 IB0 - IB3:
 
- ![alt text](images/example_signal2.jpg)
+ ![alt text](images/example_signal2.png)
 
 DB10,DBB0:
 
- ![alt text](images/example_signal3.jpg)
+ ![alt text](images/example_signal3.png)
 
 T0: 
 
-![alt text](images/example_signal4.jpg)
+![alt text](images/example_signal4.png)
 
 
 ## <a name="read"></a> Read node
