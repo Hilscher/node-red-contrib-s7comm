@@ -24,10 +24,11 @@
         "locks": "~0.2.2"
     },
     "keywords":["node-red","SIMATIC","PLC","Siemens","S7","RFC1006","iso-on-tcp"],
-    "node-red"      : {
-			"nodes"     : {
-				"s7comm": "s7comm.js"
-			}
+    "node-red"      : 
+	{
+		"nodes"     : {
+			"s7comm": "s7comm.js"
+	}
     },
     "license": "MIT"
 }
