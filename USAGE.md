@@ -14,7 +14,7 @@
 
 The S7comm-Read sends an reading request to a sps. The responde from the PLC is at the output of the node available as soon as its arrived.The nodes reads a value from the PLC triggered internally or by an inject node.
 
-![alt text] (https://github.com/Hilscher/s7comm/blob/master/images/configuration1.png)
+![alt text] (images/configuration1.png)
 
 ![alt text](images/example_readFlow02.png)
 
@@ -65,12 +65,12 @@ T0:
 -----------
 1) Select an item of the global list you want to read
 
-![alt text](images/read01.jpg "Step 1")
+![alt text](images/read01.png "Step 1")
 
 2) Select the repeating mechanism (similar to inject node)
  In case of choosing the intervall functionallity decide for a repeating time
 
-![alt text](images/read02.jpg "Step 2")
+![alt text](images/read02.png "Step 2")
 
 3) Choose a name  and a topic for your Node and confirm the Node with OK.
 
