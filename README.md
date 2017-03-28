@@ -13,7 +13,7 @@ It is using the Open-Source Library nodeS7 as its Framework which is able to han
 -----------
 Run the following command in your Node-RED user directory (typically `~/.node-red`):
 
-        npm i node-red-contrib-s7comm
+        npm install node-red-contrib-s7comm
 
 ## Getting Started
 -----------
