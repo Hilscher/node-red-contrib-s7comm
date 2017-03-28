@@ -25,9 +25,9 @@
     },
     "keywords":["node-red","SIMATIC","PLC","Siemens","S7","RFC1006","iso-on-tcp"],
     "node-red"      : {
-        "nodes"     : {
-            "s7comm": "s7comm.js"
-        }
+			"nodes"     : {
+				"s7comm": "s7comm.js"
+			}
     },
     "license": "MIT"
 }
