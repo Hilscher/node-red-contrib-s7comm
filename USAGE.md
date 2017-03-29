@@ -35,7 +35,7 @@ After double clicking the node you are in the edit dialog of the S7comm node (bo
 
 *Open Configuration Node*
 
-The Configuration Node consists of two parts. In the first part you can edit the S7comm-Connection parameter (IP,Port,Rack,Slot). The second part is the signal box. The signal box represents a global list of your SPS. This global list is available for all reading and writing nodes. After creating a global signal list push "Add" to apply the Connection parameter and create the list for all S7comm nodes.
+The Configuration Node consists of two parts. In the first part you can edit the S7comm-Connection parameter (IP,Port,Rack,Slot). The second part is the signal box. The signal box represents a global list of your PLC. This global list is available for all reading and writing nodes. After creating a global signal list push "Add" to apply the Connection parameter and create the list for all S7comm nodes.
        
 ![alt text](images/configuration2.png)
 
