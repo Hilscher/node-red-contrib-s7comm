@@ -1,3 +1,7 @@
+Version: 1.0.2
+------------
+- Update of USAGE.md
+
 Version: 1.0.1
 ------------
 - changed name of Repository
