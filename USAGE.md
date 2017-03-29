@@ -14,7 +14,7 @@
 
 The S7comm-Read sends an reading request to a sps. The responde from the PLC is at the output of the node available as soon as its arrived.The nodes reads a value from the PLC triggered internally or by an inject node.
 
-![alt text] (images/configuration1.png)
+![alt text](images/configuration1.png)
 
 ![alt text](images/example_readFlow02.png)
 
