@@ -5,9 +5,9 @@ A Node-RED node to communicate with Siemens S7 PLCs.
 
 ## About
 -----------
-The Hilscher Node-RED *node-red-contrib-s7comm* node is designed to communicate with a SIMATIC S7-300/1200/1500 SPS of SIEMENS based on the RFC1006-communication protocol. The S7comm node can build up a connection with the SIMATIC-S7. Furthermore it can Read/Write Addresses of the SPS with specific S7-Datatype.
+The Hilscher Node-RED *node-red-contrib-s7comm* node is designed to communicate with a SIMATIC S7-300/1200/1500 PLC of SIEMENS based on the RFC1006-communication protocol. The S7comm node can build up a connection with the SIMATIC-S7. Furthermore it can Read/Write Addresses of the PLC with specific S7-Datatype.
 
-It is using the Open-Source Library nodeS7 as its Framework which is able to handle the communication with the SPS. Special thanks to plcpeople for creating nodes7.
+It is using the Open-Source Library nodeS7 as its Framework which is able to handle the communication with the PLC. Special thanks to plcpeople for creating nodes7.
 
 ## Install
 -----------
