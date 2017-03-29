@@ -17,7 +17,7 @@ Run the following command in your Node-RED user directory (typically `~/.node-re
 
 ## Getting Started
 -----------
-See [USAGE.md](USAGE.md) for more details.
+See [USAGE.md](https://github.com/Hilscher/node-red-contrib-s7comm/blob/master/USAGE.md) for more details.
 
 
 ## Contributing
@@ -30,7 +30,7 @@ Node-RED [mail group](https://groups.google.com/forum/#!forum/node-red) on Googl
 
 ## Copyright and license
 -----------
-Copyright 2017, Hilscher Gesellschaft für Systemautomation mbH, under the [MIT license](LICENSE).
+Copyright 2017, Hilscher Gesellschaft für Systemautomation mbH, under the [MIT license](https://github.com/Hilscher/node-red-contrib-s7comm/blob/master/LICENSE).
 
 
 ## Additional Resources
