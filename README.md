@@ -15,6 +15,14 @@ Run the following command in your Node-RED user directory (typically `~/.node-re
 
         npm install node-red-contrib-s7comm
 
+or clone the repository within a specific folder in the Node-RED user directory and run the package.json:
+
+        git clone https://github.com/Hilscher/node-red-contrib-s7comm
+
+        cd node-red-contrib-s7comm
+
+        npm install
+
 ## Getting Started
 -----------
 See [USAGE.md](https://github.com/Hilscher/node-red-contrib-s7comm/blob/master/USAGE.md) for more details.
