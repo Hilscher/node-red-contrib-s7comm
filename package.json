@@ -19,16 +19,19 @@
             "additionalInformation":  "close to airport frankfurt"
         }
     },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/Hilscher/node-red-contrib-s7comm"
+    },
     "dependencies": {
         "nodes7": "~0.1.13",
         "locks": "~0.2.2"
     },
     "keywords":["node-red","SIMATIC","PLC","Siemens","S7","RFC1006","iso-on-tcp"],
-    "node-red"      : 
-	{
-		"nodes"     : {
-			"s7comm": "s7comm.js"
-	}
+    "node-red":{
+        "nodes": {
+            "s7comm": "s7comm.js"
+        }
     },
     "license": "MIT"
 }
