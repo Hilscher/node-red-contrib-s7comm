@@ -12,11 +12,11 @@
 ## <a name="Function"></a> Function of the S7comm node
 -----------
 
-The S7comm-Read sends an reading request to a sps. The responde from the PLC is at the output of the node available as soon as its arrived.The nodes reads a value from the PLC triggered internally or by an inject node.
+The S7comm-Read node sends a reading request to a PLC. The responde from the PLC is at the output of the node available as soon as its arrived.The nodes reads a value from the PLC triggered internally or by an inject node.
 
 ![alt text](images/example_readFlow02.png)
 
-The S7comm-Write node writes an value to a Memory of an SPS. The Value is provides either from the inject Node or from an S7comm-Read node.
+The S7comm-Write node writes a value to the memory of an PLC. The Value is provides either from the inject Node or from a S7comm-Read node.
 
 ![alt text](images/example_writeFlow01.png)
 
@@ -35,7 +35,7 @@ After double clicking the node you are in the edit dialog of the S7comm node (bo
 
 *Open Configuration Node*
 
-The Configuration Node consists of two parts. In the first part you can edit the S7comm-Connection parameter (IP,Port,Rack,Slot). The second part is the signal box. The signal box represents a global list of your PLC. This global list is available for all reading and writing nodes. After creating a global signal list push "Add" to apply the Connection parameter and create the list for all S7comm nodes.
+The Configuration Node consists of two parts. In the first part you can edit the S7comm-Connection parameter (IP,Port,Rack,Slot). The second part is the signal box. The signal box represents a global list of your PLC. This global list is available for all reading and writing nodes. After creating a global signal list push "Add" to apply the connection parameter and create the list for all S7comm nodes.
        
 ![alt text](images/configuration2.png)
 
@@ -70,23 +70,23 @@ T0:
 
 ![alt text](images/read02.png "Step 2")
 
-3) Choose a name  and a topic for your Node and confirm the Node with OK.
+3) Choose a name  and a topic for your Node and confirm the node with OK.
 
 ## <a name="write"></a> Write node
 -----------
 1) Select an item of the global list you want to write
 
-2) Choose a name for your Node and confirm the Node
+2) Choose a name for your node and confirm the node with OK
 
 
 ## <a name="JSON"></a> JSON structures
 -----------
 General structure:
 The node outputs a msg.payload in the following format to show the read/write command.
-The value Field for the read node shows the reading value. The value Field for the write node shows the writing value!
+The value field for the read node shows the reading value. The value Field for the write node shows the writing value!
 
     payload.signal : Symbolic name of the signal as configured,
-    payload.path  : Signal path of the data,
+    payload.path  : Signal path of the signal,
     payload.error : Error value: 0 = no error, -1 = any error,
     payload.value : Read/Written Value as an array
 
@@ -102,16 +102,16 @@ Special definition for *payload.value : Read/Written Value within an Array*
 The message at the output of the node has a defined JSON structures:
 
 Example:
-{
-    topic: "myTopic",
-    payload: {
-        signal: "myVar",
-        path: "MB0",
-        error:0,
-        value: [42]
-    },
-    _msgid: "ee4d0428.11b2f8"
-}
+  {
+      topic: "myTopic",
+      payload: {
+          signal: "myVar",
+          path: "MB0",
+          error:0,
+          value: [42]
+      },
+      _msgid: "ee4d0428.11b2f8"
+  }
 
 
 ##  <a name="ReadCommands"></a> Example payloads for read commands
