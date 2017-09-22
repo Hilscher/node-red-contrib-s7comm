@@ -3,6 +3,11 @@ General Notes:
 -------------
 The versions are given in the form ["major.minor.patch"](https://docs.npmjs.com/getting-started/semantic-versioning).
 
+Version: 1.1.1
+------------
+- Changes:
+
+    - Hotfix
 
 Version: 1.1.0
 ------------
