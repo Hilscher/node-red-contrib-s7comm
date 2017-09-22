@@ -11,7 +11,9 @@ It is using the Open-Source Library nodeS7 as its Framework which is able to han
 
 ## Install
 -----------
-Run the following command in your Node-RED user directory (typically `~/.node-red`):
+Install the node directly from the management palette of Node-RED.
+
+or run the following command in your Node-RED user directory (typically: *%HOMEPATH%\.nodered* for Windows or  *~/.node-red* for Linux  ):
 
         npm install node-red-contrib-s7comm
 
@@ -22,6 +24,8 @@ or clone the repository within a specific folder in the Node-RED user directory 
         cd node-red-contrib-s7comm
 
         npm install
+
+
 
 ## Getting Started
 -----------

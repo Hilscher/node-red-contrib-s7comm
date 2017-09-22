@@ -1,0 +1,816 @@
+<!-- **********************************************************************************
+Copyright (c) 2017 Hilscher Gesellschaft fuer Systemautomation mbH.
+See LICENSE
+***************************************************************************************
+Description:
+A Node-RED node to communicate with Siemens S7 PLCs.
+**************************************************************************************-->
+
+<style>
+	.node-config-input-innerRow {
+       text-align: left;
+    }
+	.inject-time-row {
+        padding-left: 110px;
+    }
+    .inject-time-row select {
+        margin: 3px 0;
+    }
+    .inject-time-row > .ui-spinner {
+        height: 28px;
+        margin: 3px 0;
+        border-color: rgb(204, 204, 204);
+    }
+    .inject-time-count {
+        width: 40px !important;
+    }
+</style>
+
+<!--******************************************************************-->
+<!--  	     global functions to create a List within selectBox	      -->
+<!--******************************************************************-->
+<script type="text/javascript">
+
+/**
+ * @description check if IP ipaddress is valid
+ * @param {ipaddress} IP-V4 Address
+ * @return {bool} true if ip valid else false
+*/
+function ValidateIPV4address  (ipaddress) {
+	if (/^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/.test(ipaddress)){  
+		return (true);
+	}else{
+		return (false);
+	}
+}
+</script>
+
+
+<!--******************************************************************-->
+<!--  			    		 Read Node			     				  -->
+<!--******************************************************************-->
+<script type="text/x-red" data-template-name="s7comm read">
+	<!-- Element: Connection -->
+	<div class="form-row">
+        <label for="node-input-connection"><i class="fa fa-globe"> </i> Connection</label>
+		<input type="text" id="node-input-connection">
+	</div>
+	
+	<!-- Element: Signal -->
+	<div class="form-row">
+		<label for="node-input-signal"><i class="fa fa-envelope"></i> Signal</label>
+		<select id="node-input-signal" style="width: 70%"></select>
+	</div>
+
+	<!-- Element: Intervall -->
+	<div class="form-row">
+		<!-- <label for=""><i class="fa fa-repeat"></i> <span data-i18n="inject.label.repeat"></span></label> -->  <!--  TODO: this is not working properly. check why -->
+        <label for=""><i class="fa fa-repeat"></i> <span>Repeat</span></label>
+        <select id="inject-time-type-select" style="width: 70%">
+            <option value="none">none</option>
+            <option value="interval">interval</option>
+        </select>
+        <input type="hidden" id="node-input-none">
+        <input type="hidden" id="node-input-repeat">
+    </div>
+    <div class="form-row inject-time-row hidden" id="inject-time-row-interval">
+        <span>every</span>
+        <input id="inject-time-interval-count" class="inject-time-count" value="1"></input>
+        <select style="width: 100px" id="inject-time-interval-units">
+            <option value="s"> seconds</option>
+            <option value="m"> minutes</option>
+            <option value="h"> hours</option>
+        </select><br/>
+    </div>
+    <div class="form-row" id="node-once">
+        <label>&nbsp;</label>
+        <input type="checkbox" id="node-input-once" style="display: inline-block; width: auto; vertical-align: top;">
+        <label for="node-input-once" style="width: 70%;" l>Inject once at start?</label>
+	</div>
+	<!-- Element: Topic -->
+    <div class="form-row">
+        <label for="node-input-topic"><i class="fa fa-tasks"></i> Topic</label>
+        <input type="text" id="node-input-topic" placeholder="Topic">
+    </div>		
+	<!-- Element: name -->
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>	
+	<!-- hidden variables, to exchange values between server- and client-side -->	
+	<input type="hidden" id="node-input-payload">	<!--  local value is saved in here-->	
+	<input type="hidden" id="node-input-payloadRead">	<!--  local value is saved in here-->	
+</script>
+
+<script type="text/x-red" data-help-name="s7comm read">
+<p>The node reads data from Siemens devices such as S7-300/400/1200/1500.</p>
+<p>The signals to be read are setup in the node's connection selector. The repeat function allows sending 
+requests either periodically or if disabled triggered by any node's input message.
+The node outputs a msg.payload in the following format:</p>
+<p style="padding-left: 10px;"><b>payload.signal :</b> Symbolic name of the signal as configured,</p>
+<p style="padding-left: 10px;"><b>payload.path :</b> Signal path of the signal,</p>
+<p style="padding-left: 10px;"><b>payload.error :</b> Error value: 0 = no error, -1 = reading failed ,</p>
+<p style="padding-left: 10px;"><b>payload.value :</b> Read data as array. The returned data can be either:</p>
+<p style="padding-left: 30px;"><em>null</em>: in case of an error;</p>
+<p style="padding-left: 30px;"><em>single value</em>: if the quantity equals to one;</p>
+<p style="padding-left: 30px;"><em>array of values</em>: if the quantity is larger than one;</p>
+</br></br>
+Example payload of output msg:</br>
+1) Reading Q0.1, return value is true and valid:</br>
+<div style="padding-left: 17px;"> {topic:"Input_hall#1", payload:{signal: "machine#1", path:"Q0.1",error:0, value:[true] }, _msgid: "92e3f0cc.6d1c1"} </div></br>
+2) Reading QB1, return value is 100 and valid:</br>
+<div style="padding-left: 17px;"> {topic:"Input_hall#1", payload:{signal: "machine#1", path:"QB1",error:0, value:[100] }, _msgid: "92e3f0cc.6d1c1"} </div></br>
+3) Reading QB0-QB3, return value is [1,2,3,4] and valid:</br>
+<div style="padding-left: 17px;"> {topic:"Input_hall#1", payload:{signal: "machine#1", path:"QB0..3",error:0, value:[1,2,3,4] }, _msgid: "92e3f0cc.6d1c1"} </div></br>
+4) Reading DB11.DBB0 - DB11.DBB3, return value is [null,null,null,null] and invalid because DB11 does not exist:</br>
+<div style="padding-left: 17px;"> {topic:"Input_hall#1", payload:{signal: "machine#1", path:"DB10,BYTE0..3",error:-1, value:[null,null,null,null] }, _msgid: "92e3f0cc.6d1c1"} </div></br>
+5) In any case of Error:  </br> 
+<div style="padding-left: 17px;"> error=-1, value=[null] </div></br>
+</script>
+
+<script type="text/javascript">
+RED.nodes.registerType('s7comm read',{
+		category: 'input',
+		color:"#009999",
+		defaults: {
+			connection: {type:"s7comm", required:true},
+			payload: {value:""},
+            s7Name: {value:""},
+			topic: {value:""},
+			name: {value:""},
+			signalSetted: {value:false},
+			none:{value:false},
+			repeat: {value:""},
+			once: {value:false}
+			//property:{signalSetted: {value:false},none:{value:false},repeat: {value:""},once: {value:false}}
+		},
+		inputs:1,
+		outputs:1,
+		icon: "fieldbus.png",
+		paletteLabel:"s7comm", 
+		label: function() {return this.name||this.topic||"s7comm:read";},
+		labelStyle: function() {return this.name?"node_label_italic":"";},
+		oneditprepare: function() {
+			var node=this;
+
+			/************ local select List  ********** */
+			var list = [];
+
+			function updateList(configID){
+				//emptyList
+				$('#node-input-signal option').remove();
+
+				//get node-content by reference to an node id	
+				var configData=RED.nodes.node(configID);
+				if (!configData) return;
+				
+				//get the content of the global List
+				list = configData.payload || [];
+				if (typeof list === 'string') list = JSON.parse(list);
+	
+				//iterate through payload
+				$.each(list, function(i, dataset) {
+					$("#node-input-signal").append($('<option/>', {
+						//selected: "selected",
+						value: JSON.stringify(dataset),
+						text:dataset.S7_Name
+					}));
+				});
+				//mark the selected item to find it the next time
+				$("#node-input-signal option").filter(function() {return $(this).val() == node.payload;}).attr('selected',true);
+				
+				//save the S7 Name
+				node.payload=$("#node-input-signal option:selected").val();
+				
+				$("#node-input-signal").change(function() {
+					node.s7Name=$("#node-input-signal option:selected").text();//Do i need this?
+					$("#node-input-payload").val($("#node-input-signal option:selected").val());
+					//mark the selected item to find it the next time
+					$("#node-input-signal option").filter(function() {return $(this).val() == node.payload;}).attr('selected',true);
+				}).change();
+			};
+
+			//Creates a new List when another Connection is getting selected
+			$("#node-input-connection").change(function(){
+				updateList($("#node-input-connection option:selected").val());
+			});	
+			//Always create the select List when the dialog box is getting opened!
+			updateList(node.connection);
+
+
+
+
+			/************ Intervall-functionality ********** */
+			$("#inject-time-type-select").change(function() {
+                var id = $("#inject-time-type-select option:selected").val();
+                $(".inject-time-row").hide();
+                $("#inject-time-row-"+id).show();
+                if ((id == "none") || (id == "interval")) {
+                    $("#node-once").show();
+                }else {
+                    $("#node-once").hide();
+                    $("#node-input-once").prop('checked', false);
+                }
+            });
+            $(".inject-time-count").spinner({min:1});
+            $("#inject-time-interval-units").change(function() {
+                var units = $("#inject-time-interval-units option:selected").val();
+            });
+            $.widget( "ui.injecttimespinner", $.ui.spinner,{
+                options: {
+                    // seconds
+                    step: 60 * 1000,
+                    // hours
+                    page: 60
+                },
+                _parse: function( value ) {
+                    if ( typeof value === "string" ) {
+                        // already a timestamp
+                        if ( Number( value ) == value ) {
+                            return Number( value );
+                        }
+                        var p = value.split(":");
+                        var offset = new Date().getTimezoneOffset();
+                        return ((Number(p[0])*60)+Number(p[1])+offset)*60*1000;
+
+                    }
+                    return value;
+                },
+                _format: function( value ) {
+                    var d = new Date(value);
+                    var h = d.getHours();
+                    var m = d.getMinutes();
+                    return ((h < 10)?"0":"")+h+":"+((m < 10)?"0":"")+m;
+                }
+            });
+            $("#inject-time-time").injecttimespinner();
+            var repeattype = "none";
+            if (this.repeat != "" && this.repeat != 0) {
+                repeattype = "interval";
+                var r = "s";
+                var c = this.repeat;
+                if (this.repeat % 60 === 0) { r = "m"; c = c/60; }
+                if (this.repeat % 1440 === 0) { r = "h"; c = c/60; }
+                $("#inject-time-interval-count").val(c);
+                $("#inject-time-interval-units").val(r);
+            }else{
+                $("#inject-time-type-select option").filter(function() {return $(this).val() == "none";}).attr('selected',true);
+            }
+            $(".inject-time-row").hide();
+            $("#inject-time-type-select option").filter(function() {return $(this).val() == repeattype;}).attr('selected',true);
+            $("#inject-time-row-"+repeattype).show();
+            $("#inject-time-type-select").change();
+		},
+        oneditsave: function() {
+			var node=this;
+
+			//Intervall-functionality
+            var none=false;
+		    var repeat = "";
+            var type = $("#inject-time-type-select option:selected").val();      
+            if (type == "none") {
+                none=true;
+            } else if (type == "interval") {
+                var count = $("#inject-time-interval-count").val();
+                var units = $("#inject-time-interval-units option:selected").val();
+                if (units == "s") {
+                    repeat = count;
+                } else if (units == "m") {
+                    repeat = count * 60;
+                } else if (units == "h") {
+                     repeat = count * 60 * 60;
+                }
+            }
+            $("#node-input-none").val(none);
+            $("#node-input-repeat").val(repeat);
+		},
+		oneditcancel: function(){
+			
+		}
+    });
+</script>
+
+
+
+<!--******************************************************************-->
+<!--  			    		 Write Node			     				  -->
+<!--******************************************************************-->
+<script type="text/x-red" data-template-name="s7comm write">
+	<!-- Element: Connection -->
+	<div class="form-row">
+        <label for="node-input-connection"><i class="fa fa-globe"> </i> Connection</label>
+		<input type="text" id="node-input-connection">
+    </div>
+	<!-- Element: Signal -->
+	<div class="form-row">
+		<label for="node-input-signal"><i class="fa fa-envelope"></i> Signal</label>
+		<select id="node-input-signal" style="width: 70%"></select>
+	</div>
+
+	<!-- Element: Topic -->
+    <div class="form-row">
+        <label for="node-input-topic"><i class="fa fa-tasks"></i> Topic</label>
+        <input type="text" id="node-input-topic" placeholder="Topic">
+    </div>		
+	<!-- Element: name -->
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>		
+	<!-- hidden variables, to exchange values between server- and client-side -->	
+	<input type="hidden" id="node-input-payload">		 <!--  local value is saved in here-->
+	<input type="hidden" id="node-input-payloadWrite">	<!--  local value is saved in here-->	
+</script>
+
+<script type="text/x-red" data-help-name="s7comm write">
+<p>The node writes data to Siemens devices such as S7-300/400/1200/1500.</p>
+<p>The signals to be written are setup in the node's connection selector. To write a value 
+input a message with msg.payload <em>value</em> as JSON object of type array:</p>
+<p style="padding-left: 17px;"><b> {"value":[42]}</b> </p>
+<p>The node outputs a msg.payload in the following format to confirm the write command:</p>
+<p style="padding-left: 17px;"><b>payload.signal :</b> Symbolic name of the signal as configured,</p>
+<p style="padding-left: 17px;"><b>payload.path :</b> Signal path of the signal,</p>
+<p style="padding-left: 17px;"><b>payload.error :</b> Error value: 0 = no error, -1 = writing failed,</p>
+<p style="padding-left: 17px;"><b>payload.value :</b> Value to be written</p>
+</br></br>
+Example payload of output msg:</br>
+1) Writing true to I0.3, writing succeeded, Error equals to 0:</br>
+<div style="padding-left: 17px;">{topic:"Input_hall#1", payload:{signal: "machine#1", path:"I0.3",error:0, value:[true] }, "_msgid": "92e3f0cc.6d1c1"} </div></br>
+2) Writing 8 to IB1, writing succeeded, Error equals to 0:</br>
+<div style="padding-left: 17px;">{{topic:"Input_hall#1", payload:{signal: "machine#1", path:"IB1",error:0, value:[8] }, "_msgid": "92e3f0cc.6d1c1"} </div></br>
+3) Writing [1,2,3] to IB1-IB3, writing succeeded, Error equals to 0:</br>
+<div style="padding-left: 17px;">{{topic:"Input_hall#1", payload:{signal: "machine#1", path:"IB1..3",error:0, value:[1,2,3]}, _msgid: "92e3f0cc.6d1c1"} </div></br>
+4) Writing 8 to IB1, Writing failed, Error equals to -1:</br>
+<div style="padding-left: 17px;">{{topic:"Input_hall#1", payload:{signal: "machine#1", path:"IB1",error:-1, value:[8]}, _msgid: "92e3f0cc.6d1c2"} </div></br>
+</script>
+
+<script type="text/javascript">
+RED.nodes.registerType('s7comm write',
+{		category: 'output',
+        color:"#009999",
+		defaults: {
+			connection: {type:"s7comm", required:true},
+			payload: {value:""},
+            s7Name: {value:""},
+            topic: {value:""},
+			//topic: {value:"",validate: RED.validators.regex(/^(#$|(\+|[^+#]*)(\/(\+|[^+#]*))*(\/(\+|#|[^+#]*))?$)/)},
+			name: {value:""},
+			signalSetted: {value:false},
+			//property:{value:""}
+		},
+		inputs:1,
+        outputs:1,
+		align: "right",
+        icon: "fieldbus.png",
+		paletteLabel:"s7comm", 
+        label: function() {return this.name||this.topic||"s7comm:write";},
+        labelStyle: function() {return this.name?"node_label_italic":"";},
+		oneditprepare:  function() {
+			var node=this;
+			
+			/************ local select List  ********** */
+			var list = [];
+
+			function updateList(configID){
+				//emptyList
+				$('#node-input-signal option').remove();
+
+				//get node-content by reference to an node id	
+				var configData=RED.nodes.node(configID);
+				if (!configData) return;
+				
+				//get the content of the global List
+				list = configData.payload || [];
+				if (typeof list === 'string') list = JSON.parse(list);
+	
+				//iterate through payload
+				$.each(list, function(i, dataset) {
+					$("#node-input-signal").append($('<option/>', {
+						//selected: "selected",
+						value: JSON.stringify(dataset),
+						text:dataset.S7_Name
+					}));
+				});
+				//mark the selected item to find it the next time
+				$("#node-input-signal option").filter(function() {return $(this).val() == node.payload;}).attr('selected',true);
+				
+				//save the S7 Name
+				node.payload=$("#node-input-signal option:selected").val();
+				
+				$("#node-input-signal").change(function() {
+					node.s7Name=$("#node-input-signal option:selected").text();//Do i need this?
+					$("#node-input-payload").val($("#node-input-signal option:selected").val());
+					//mark the selected item to find it the next time
+					$("#node-input-signal option").filter(function() {return $(this).val() == node.payload;}).attr('selected',true);
+				}).change();
+			};
+
+			//Creates a new List when another Connection is getting selected
+			$("#node-input-connection").change(function(){
+				updateList($("#node-input-connection option:selected").val());
+			});	
+			//Always create the select List when the dialog box is getting opened!
+			updateList(node.connection);
+		},        
+		oneditsave: function() {
+			var node=this;	
+
+		},
+		oneditcancel: function() {
+			var node=this;
+
+		}
+    });
+</script>
+
+
+
+<!--******************************************************************-->
+<!--  			     Configuration Node			     				  -->
+<!--******************************************************************-->
+<script type="text/x-red" data-template-name="s7comm">  
+	
+	<div class="form-row well">
+		<center><b style="font-size:14px">Connection parameter</b><br></br></center>
+		<!-- Element: ip,port,Rack,Slot-->
+		<div class="form-row">
+			<label for="node-config-input-ip" >IP-Adress:</label>
+			<input class="input-append-left" type="text" id="node-config-input-ip" placeholder="localhost" style="width: 40%;" >     
+			<label for="node-config-input-port" style="margin-left: 10px; width: 35px; "> Port:</label>
+			<input class="input-append-left" type="text" id="node-config-input-port" placeholder="102" style="width:20%">	
+		</div>
+		<div class="form-row">
+			<label for="node-config-input-rack"> Rack:</label>
+			<input class="input-append-left" type="text" id="node-config-input-rack" placeholder="0" style="width: 40%;" >
+			<label for="node-config-input-slot" style="margin-left: 10px; width: 35px; "> Slot:</label>
+			<input class="input-append-left" type="text" id="node-config-input-slot" placeholder="2" style="width:20%">
+		</div>
+	</div>
+
+	<!-- Element: Box-->
+	<hr></hr> <!-- horizontal Line-->
+	<div>Signals: </div>	
+	<div class="form-row node-config-input-payload-container-row">
+        <ol id="node-config-input-payload-container"></ol>
+	</div>
+
+</script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('s7comm',{
+        category: 'config',
+        defaults: {
+			ip: {value:"192.168.0.1",required:true,validate: RED.validators.regex(/^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/)},
+            port: {value:"102",required:true,validate:RED.validators.number()},
+			rack: {value:"0",required:true,validate:RED.validators.number()},
+			slot: {value:"2",required:true,validate:RED.validators.number()},
+			payload: {value:[{S7_Type:"I" ,S7_DBnum:"0",S7_Datatype:"X",S7_Offset:"0",S7_BitOffset:"0",S7_Quantity:"1",S7_Name:""}]}
+        },
+        label: function() {return this.ip+":"+this.port;},
+        labelStyle: function() {return this.name?"node_label_italic":"";},
+		oneditprepare: function() {
+			var node=this;
+
+			//v=send to JS  , t=shown in HTML
+			var operators1 = [
+				{v:"I",t:"Input"}
+				,{v:"Q",t:"Output"}
+				,{v:"M",t:"Marker"}
+				,{v:"DB",t:"Datablock"}
+				,{v:"T",t:"Timer"}
+				,{v:"C",t:"Counter"}
+				//,{v:"PI",t:"Peripheral Input"} // commented out because not Tested
+				//,{v:"PQ",t:"Peripheral Output"} // commented out because not Tested
+			];
+			var operators2 = [
+				{v:"X",t:"Bit"}
+				,{v:"B",t:"Byte"}
+				,{v:"W",t:"Word"}
+				,{v:"D",t:"DWord"}
+				,{v:"I",t:"Int"}
+				,{v:"DI",t:"DInt"}
+				,{v:"uint8",t:"uint8"}
+				,{v:"uint16",t:"uint16"}
+				,{v:"uint32",t:"uint32"}
+				,{v:"int16",t:"int16"}
+				,{v:"int32",t:"int32"}
+				,{v:"R",t:"Real"}
+				,{v:"CHAR",t:"Char"}
+				,{v:"STRING",t:"S7-String"}
+				/*
+				,{v:"TIMER",t:"Timer"}		
+				,{v:"COUNTER",t:"Counter"}
+				not supported within NodeS7
+				,{v:"S5TIME",t:"S5TIME"}
+				,{v:"TIME",t:"TIME"}
+				,{v:"DATE",t:"Date"}
+				,{v:"TOD",t:"Time_Of_Day"}
+				*/
+			];
+			var operators3 = [{v:"0",t:"0"},{v:"1",t:"1"},{v:"2",t:"2"},{v:"3",t:"3"},{v:"4",t:"4"},{v:"5",t:"5"},{v:"6",t:"6"},{v:"7",t:"7"}]; 
+		
+			function resizeItems(item){
+				
+			};
+
+	        $("#node-config-input-payload-container").css('min-height','700px').css('min-width','450px').editableList({
+			    addItem: function(container,i,data) {
+					//Insert new Element because Add Button was pressed!
+					if (!data.hasOwnProperty('item')) {
+						data.item = {S7_Type:"I" ,S7_DBnum:"0",S7_Datatype:"X",S7_Offset:"0",S7_BitOffset:"0",S7_Quantity:"1",S7_Name:""};
+					}
+					
+                    var table = $('<table/>',{class:"node-config-input-table",style:"width: 100%"}).appendTo(container);
+					var tableBody =$('<tbody/>').appendTo(table);
+					var tableRow =$('<tr/>').appendTo(tableBody);
+
+					var cell1 =$('<td/>',{style:'width: 10%;'}).appendTo(tableRow); // S7_Type
+					var cell2 =$('<td/>',{style:'width: 20px;'}).appendTo(tableRow); // 'Num'
+					var cell3 =$('<td/>').appendTo(tableRow); // S7_DBnum
+					var cell4 =$('<td/>').appendTo(tableRow); // S7_Datatype
+					var cell5 =$('<td/>',{style:'width: 30px;'}).appendTo(tableRow); // 'Offset'
+					var cell6 =$('<td/>').appendTo(tableRow); // S7_Offset
+					var cell7 =$('<td/>',{style:'width: 5px;'}).appendTo(tableRow); // '.'	
+					var cell8 =$('<td/>').appendTo(tableRow); // S7_BitOffset
+					var cell9 =$('<td/>',{style:'width: 30px;'}).appendTo(tableRow); // "Quantity"
+					var cell10 =$('<td/>').appendTo(tableRow);// S7_Quantity
+					var cell11 =$('<td/>',{style:'width: 25%;'}).appendTo(tableRow);// S7_Name
+					var cell12 =$('<td/>',{style:'width: 15px;'}).appendTo(tableRow);// index
+
+					//S7_Type
+					var S7_Type = $("<select/>",{
+						name:'S7_Type',
+						style:"width: 100%; text-align:center"
+					}).appendTo(cell1);
+					for (var d in operators1) {
+						S7_Type.append($("<option></option>").val(operators1[d].v).text(operators1[d].t));
+					}
+					//'Num'
+					var Num = $('<span/>',{
+						style:"width:10%; margin-left: 5px;"
+					}).text("Num:").appendTo(cell2);
+					
+					//S7_DBnum	
+					var S7_DBnum = $('<input/>',{
+						class:"ui-spinner-input",
+						style:"width:60% ; margin-right:.4em; text-align: center;",
+						type:"text"
+					}).spinner({icons: { down: "ui-icon-triangle-1-n", up: "ui-icon-triangle-1-s" }}).appendTo(cell3);
+					
+					//S7_Datatype			
+					var S7_Datatype = $("<select/>",{
+						style:"width:100%;  text-align: center;"
+					}).appendTo(cell4);
+					for (var d in operators2) {S7_Datatype.append($("<option></option>").val(operators2[d].v).text(operators2[d].t));}
+					
+					//'Offset'
+					var Offset = $('<span/>',{
+						style:"display:inline-block;font-size: 15px;vertical-align: -2px; margin-left: 5px;"
+					}).text("Offset:").appendTo(cell5);
+					
+					//S7_Offset
+					var S7_Offset = $('<input/>',{
+						class:"ui-spinner-input",
+						style:"display:inline-block; width:99% ; text-align: center;",
+						type:"text"
+					}).spinner({icons: {
+						 down: "ui-icon-triangle-1-n",
+						 up: "ui-icon-triangle-1-s" 
+					}}).appendTo(cell6);
+					
+					// '.'		
+					var dot = $('<span/>',{
+						style:"display:inline-block; font-size: 30px; ; vertical-align: -10px"
+					}).text(".").appendTo(cell7);
+					
+					//S7_BitOffset	
+					var S7_BitOffset = $("<select/>",{
+						style:"width:100px; "
+					}).appendTo(cell8);
+					for (var d in operators3) {S7_BitOffset.append($("<option></option>").val(operators3[d].v).text(operators3[d].t));}
+					
+					//"Quantity"
+					var Quantity = $('<span/>',{
+						style:" font-size: 15px;vertical-align: -2px; margin-left: 5px; width:95%"
+					}).text("Quantity:").appendTo(cell9);
+					
+					//S7_Quantity
+					var S7_Quantity = $('<input/>',{
+						class:"ui-spinner-input",
+						style:" width:95% ; text-align: center;margin-bottom: 3px;margin-left: 3px  ",
+						type:"text",
+						value:1
+					})
+					.spinner({icons: { down: "ui-icon-triangle-1-n", up: "ui-icon-triangle-1-s" }}).appendTo(cell10);
+					
+					//S7_Name
+					var S7_Name = $('<input/>',{
+						type:"text",
+						placeholder:"Name",
+						style:"width:100% "
+					}).appendTo(cell11)
+
+					var finalspan = $('<span/>',{style:"float: right;margin-top: 6px;width:95% ;"}).appendTo(cell12);
+					finalspan.append(':<span class="node-config-input-item-index">'+(i+1)+'</span> ');
+					
+					//save values:  
+					S7_Type.val(data.item.S7_Type);
+					S7_DBnum.val(data.item.S7_DBnum);
+					S7_Datatype.val(data.item.S7_Datatype);
+					S7_Offset.val(data.item.S7_Offset);
+					S7_BitOffset.val(data.item.S7_BitOffset);
+					S7_Quantity.val(data.item.S7_Quantity);
+					S7_Name.val(data.item.S7_Name);
+
+					//dynamic change of S7-Type selectbox (S7_Type) and Datatype selectbox (S7_Datatype) 
+					S7_Type.change(function() {
+						var f1=S7_Type.children("option:selected").val();
+						var f3=S7_Datatype.children("option:selected").val();	
+						
+						dot.hide();
+						S7_BitOffset.hide();
+						Quantity.show();
+						S7_Quantity.show();
+
+						switch(f1) {
+							case "E":
+							case "I":
+							case "A":
+							case "Q":
+							case "M":
+							case "PI":
+							case "PQ":{
+									Num.hide();
+									S7_DBnum.hide();
+									S7_Datatype.show();
+									Offset.show();
+									S7_Offset.show();
+									if(f3==="X"){
+										dot.show();
+										S7_BitOffset.show();
+										Quantity.hide();
+										S7_Quantity.hide();
+									}else if(f3==="CHAR"){
+										dot.hide();
+										S7_BitOffset.hide();
+										Quantity.hide();
+										S7_Quantity.hide();
+									}			
+									break;
+								}
+							case "DB":{
+									Num.show();
+									S7_DBnum.show();
+									S7_Datatype.show();
+									Offset.show();
+									S7_Offset.show();
+									if(f3==="X"){
+										dot.show();
+										S7_BitOffset.show();
+										Quantity.hide();
+										S7_Quantity.hide();
+									}else if(f3==="CHAR"){
+										dot.hide();
+										S7_BitOffset.hide();
+										Quantity.hide();
+										S7_Quantity.hide();
+									}					
+									break;
+								}
+							case "T":
+							case "C":{
+									Num.hide();
+									S7_DBnum.hide();
+									S7_Datatype.hide();
+									Offset.show();
+									S7_Offset.show();
+									dot.hide();
+									S7_BitOffset.hide();
+									Quantity.hide();
+									S7_Quantity.hide();
+									break;
+								}                 						
+							default:{ 	}
+						}
+					});	
+					S7_Datatype.change(function() {
+						var f3=S7_Datatype.children("option:selected").val();
+						
+						switch(f3) {
+							case "X":
+								dot.show();
+								S7_BitOffset.show();
+								Quantity.hide();
+								S7_Quantity.hide();
+								break;
+							case "B":
+							case "W":
+							case "D":
+							case "I":
+							case "DI":
+							case "uint8":
+							case "uint16":
+							case "uint32":
+							case "int16":
+							case "int32":
+							case "STRING":
+							case "R":
+								dot.hide();
+								S7_BitOffset.hide();
+								Quantity.show();
+								S7_Quantity.show();
+								break;
+							case "CHAR":
+								dot.hide();
+								S7_BitOffset.hide();
+								Quantity.hide();
+								S7_Quantity.hide();
+								break;
+							default:
+								dot.hide();
+								S7_BitOffset.hide();
+								Quantity.hide();
+								S7_Quantity.hide();
+						}
+						var f1=S7_Type.children("option:selected").val();
+						if(f1==="T"||f1==="C"){
+								dot.hide();
+								S7_BitOffset.hide();
+								Quantity.show();
+								S7_Quantity.show();
+						}
+						
+					});		
+					
+					S7_Type.change();
+					S7_Datatype.change();
+                },
+				removeItem: function(opt) {
+                    if (opt.hasOwnProperty('i')) {
+                        var removedList = $("#node-config-input-payload-container").data('removedList')||[];
+                        removedList.push(opt.i);
+                        $("#node-config-input-payload-container").data('removedList',removedList);
+                    }
+
+                    var items = $("#node-config-input-payload-container").editableList('items');
+                    items.each(function(i) { $(this).find(".node-config-input-item-index").html(i+1); });
+				},
+                sortItems: function(items) {
+                    var items = $("#node-config-input-payload-container").editableList('items');
+                    items.each(function(i) { $(this).find(".node-config-input-item-index").html(i+1); });
+                },
+				resizeItem: resizeItems,
+                sortable: true,
+				removable: true
+            });
+
+			for (var i=0;i<this.payload.length;i++) {
+				var data=this.payload[i];	
+				$("#node-config-input-payload-container").editableList('addItem',{i:i,item:data});
+			}
+		},
+        oneditsave: function() {
+			if(!ValidateIPV4address($("#node-config-input-ip").val())){
+				alert("WARINING: INVALID IP!");
+			}
+			if( isNaN(Number($("#node-config-input-port").val()))){
+				alert("WARINING: INVALID PORT!");
+			}
+			if( isNaN(Number($("#node-config-input-rack").val()))){
+				alert("WARINING: INVALID RACK!");
+			}
+			if( isNaN(Number($("#node-config-input-slot").val()))){
+				alert("WARINING: INVALID SLOT!");
+			}
+
+			var node=this;
+			node.payload= [];
+			var payload = $("#node-config-input-payload-container").editableList('items');
+			var row1,row2,row3,row4,row5,row6,row7;
+
+            payload.each(function(i) {
+				//iterate throgh row to get cell content
+				$(this).children().children().children().children().each(function(i){
+					var cell = $(this);
+					if(i===0){// S7_Type
+						row1=cell.find("select").val();
+					}else if(i===2){// S7_DBnum
+						row2=cell.children().val();
+					}else if(i===3){// S7_Datatype
+						row3=cell.find("select").val();
+					}else if(i===5){// S7_Offset
+						row4=cell.children().val();
+					}else if(i===7){// S7_BitOffset
+						row5=cell.find("select").val();
+					}else if(i===9){// S7_Quantity
+						row6=cell.children().val();
+					}else if(i===10){// S7_Name
+						row7=cell.children().val();
+					}
+				});
+				node.payload.push({"S7_Type":row1,"S7_DBnum":row2,"S7_Datatype":row3,"S7_Offset":row4,"S7_BitOffset":row5,"S7_Quantity":row6,"S7_Name":row7});
+            });
+		}
+	});
+</script>
+

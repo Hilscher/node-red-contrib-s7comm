@@ -1,8 +1,8 @@
 {
     "name": "node-red-contrib-s7comm",
-    "version": "1.0.2",
+    "version": "1.1.0",
     "description": "A Node-RED node to communicate with Siemens S7 PLCs.",
-    "main": "s7comm.js",
+    "main": "src/s7comm.js",
     "author": {
         "name": "SE",
         "departement": "netAUTOMATION",
@@ -13,10 +13,10 @@
         "address": {
             "street": "Rheinstrasse 15",
             "city": "Hattersheim",
-            "state":  "",
+            "state": "",
             "country": "Germany",
             "zip": "65795",
-            "additionalInformation":  "close to airport frankfurt"
+            "additionalInformation": "close to airport frankfurt"
         }
     },
     "repository": {
@@ -24,13 +24,31 @@
         "url": "https://github.com/Hilscher/node-red-contrib-s7comm"
     },
     "dependencies": {
-        "nodes7": "~0.1.13",
-        "locks": "~0.2.2"
+        "nodes7": "0.2.5"
     },
-    "keywords":["node-red","SIMATIC","PLC","Siemens","S7","RFC1006","iso-on-tcp"],
-    "node-red":{
+    "devDependencies": {
+        "eslint-config-airbnb": "^13.0.0",
+        "eslint-config-airbnb-base": "^12.0.0",
+        "eslint-plugin-import": "^2.7.0",
+        "eslint-plugin-jsx-a11y": "^5.1.1",
+        "eslint-plugin-react": "^7.1.0",
+        "gulp": "^3.9.1",
+        "gulp-eslint": "^4.0.0",
+        "run-sequence": "^1.2.2"
+    },
+    "keywords": [
+        "node-red",
+        "SIMATIC",
+        "PLC",
+        "Siemens",
+        "S7",
+        "S7comm",
+        "RFC1006",
+        "iso-on-tcp"
+    ],
+    "node-red": {
         "nodes": {
-            "s7comm": "s7comm.js"
+            "s7comm": "src/s7comm.js"
         }
     },
     "license": "MIT"
