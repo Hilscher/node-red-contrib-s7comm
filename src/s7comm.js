@@ -12,8 +12,8 @@ const events = require('events');
 const StringDecoder = require('string_decoder').StringDecoder;
 
 // 3rd-party library
-//const NodeS7 = require('nodes7');
-const NodeS7 = require('./nodeS7_V0.2.5_patch.js');
+const NodeS7 = require('nodes7');
+
 
 
 // show console logs of nodeS7 and Node-RED node
