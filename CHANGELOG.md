@@ -3,11 +3,20 @@ General Notes:
 -------------
 The versions are given in the form ["major.minor.patch"](https://docs.npmjs.com/getting-started/semantic-versioning).
 
-Version: 1.1.1
+
+Version: 1.1.2
 ------------
 - Changes:
 
+    - Folder structure adapted to node-red format
+	- created npmignore file
+
+Version: 1.1.1
+------------
+- Bug Fixes:
+
     - Hotfix
+
 
 Version: 1.1.0
 ------------

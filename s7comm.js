@@ -14,8 +14,6 @@ const StringDecoder = require('string_decoder').StringDecoder;
 // 3rd-party library
 const NodeS7 = require('nodes7');
 
-
-
 // show console logs of nodeS7 and Node-RED node
 // debug: -1=nothing,  0=error,  1=error+warning+info
 const logLevelNodeS7 = {
