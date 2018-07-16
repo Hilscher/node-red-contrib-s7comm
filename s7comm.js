@@ -92,7 +92,7 @@ function timestamp() {
  * Checks if the given value is an numeric value or a string representing a numeric value
  * @param {anyVal} n - A value that has to be tested
  * @returns {bool} true in case of a numeric value else false
- *  console.log(isNumeric(true)) //false
+ * console.log(isNumeric(true)) //false
  * console.log(isNumeric(1))     //true
  * console.log(isNumeric(1.01))  //true
  * console.log(isNumeric(1e10))  //true
@@ -104,6 +104,29 @@ function timestamp() {
  */
 function isNumeric(n) {
   return !isNaN(parseFloat(n)) && isFinite(n);
+}
+
+/**
+ * @description
+ * Checks if the given value is an float value
+ * @param {anyVal} n - A value that has to be tested
+ * @returns {bool} true in case of a float value else false
+ * console.log(isFloat(1.01))  //true
+ *  console.log(isFloat(-1.01)) //true
+ *  console.log(isFloat(1))     //false
+ *  console.log(isFloat(1e10))  //false
+ *  console.log(isFloat('1.4')) //false
+ *  console.log(isFloat('-1.4'))//false
+ *  console.log(isFloat('1e5')) //false
+ *  console.log(isFloat('a'))   //false
+ *  console.log(isFloat('1a'))  //false
+ *  console.log(isFloat(true))  //false
+ */
+function isFloat( value ) {
+	if ( typeof value === 'number') {
+		return ( value%1 !== 0 );
+	}
+	return false;
 }
 
 /**
@@ -292,20 +315,19 @@ function checkWritingValue(node, val) {
       }
     }
     if (node.rcvData.S7_Datatype == 'R') {
-      if (val[i] < 0x00) {
-        // err=true;
-        tmp[i] = 0;
+      if (isNumeric(val[i])) {
+        tmp[i] = val[i];
       } else {
-        if (isNumeric(val[i])) {
-          tmp[i] = val[i];
-        } else {
-          tmp[i] = 0;
-          err = true;
-        }
+        tmp[i] = 0;
+        err = true;
       }
     }
-    if (node.rcvData.S7_Datatype == 'TIMER') {}
-    if (node.rcvData.S7_Datatype == 'COUNTER') {}
+    if (node.rcvData.S7_Datatype == 'TIMER') {
+      //TODO: Validate Value
+    }
+    if (node.rcvData.S7_Datatype == 'COUNTER') {
+      //TODO: Validate Value
+    }
   }
   if (fatalError === true) {
     ret = null;
