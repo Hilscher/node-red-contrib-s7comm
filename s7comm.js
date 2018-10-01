@@ -8,25 +8,79 @@
 
 // System library
 const util = require('util');
-const events = require('events');
-const StringDecoder = require('string_decoder').StringDecoder;
 
 // 3rd-party library
-const NodeS7 = require('nodes7');
+const Nodes7 = require('nodes7');
+require('colors');
 
-// show console logs of nodeS7 and Node-RED node
-// debug: -1=nothing,  0=error,  1=error+warning+info
-const logLevelNodeS7 = {
-  debug: 1,
-  silent: true,
-};
+let NetKeepAlive = null;
+try {
+  // Because net-keepalive depends on the OS
+  NetKeepAlive = require('net-keepalive');
+} catch (er) {
+  console.log('' + timestamp().format_NodeRed + ' - ' +'[s7comm-Error] - Installation of Module net-keepalive failed because we might be on the wrong OS. OS=' + process.platform);
+  NetKeepAlive = null;
+}
 
-// debug:-1=nothing, 0=error, 1=error+warning, 2=error+warning+info, 3=error+warning+info+function
-const logLevelNodeRED = {
-  debug: 2,
-  silent: true,
-};
 
+// Configuration Management
+
+const logLevelNodeS7Default = { debug: 0, silent: true };
+const logLevelNodeREDDefault = { debug: 1, silent: true };
+let logLevelNodeS7 = { debug: -1, silent: true };
+let logLevelNodeRED = { debug: -1, silent: true };
+// Logging nodes7 logLevelNodeS7Default => debug: -1=nothing,  0=error,  1=error+warning+info
+// Logging node logLevelNodeREDDefault => debug:-1=nothing, 0=error, 1=error+warning, 2=error+warning+info, 3=error+warning+info+function
+
+let config = null;
+try {
+  config = require('./config.json');
+} catch (er) {
+  console.log('' + timestamp().format_NodeRed + ' - ' +'[s7comm-Error] - Error during parsing of config.json. Set Default values.',);
+  // set default values
+  logLevelNodeS7 = logLevelNodeS7Default;
+  logLevelNodeRED = logLevelNodeREDDefault;
+}
+
+function setConfiguration() {
+  // Parse config.json
+  if (config) {
+    // Set logLevelNodeS7
+    if (config.logLevelNodeS7 !== undefined
+      && config.logLevelNodeS7.debug !== undefined
+      && config.logLevelNodeS7.silent !== undefined
+      && typeof (config.logLevelNodeS7.debug) === 'number'
+      && typeof (config.logLevelNodeS7.silent) === 'boolean'
+    ) {
+      logLevelNodeS7.debug = config.logLevelNodeS7.debug;
+      logLevelNodeS7.silent = config.logLevelNodeS7.silent;
+    } else {
+      console.log('' + timestamp().format_NodeRed + ' - ' +'[s7comm-Error] - Error during parsing of config.json. Set default values for logLevelNodeS7.');
+      logLevelNodeS7 = logLevelNodeS7Default;
+    }
+
+    // Set logLevelNodeRED
+    if (config.logLevelNodeRED !== undefined
+      && config.logLevelNodeRED.debug !== undefined
+      && config.logLevelNodeRED.silent !== undefined
+      && typeof (config.logLevelNodeRED.debug) === 'number'
+      && typeof (config.logLevelNodeRED.silent) === 'boolean'
+    ) {
+      logLevelNodeRED.debug = config.logLevelNodeRED.debug;
+      logLevelNodeRED.silent = config.logLevelNodeRED.silent;
+    } else {
+      console.log('' + timestamp().format_NodeRed + ' - ' +'[s7comm-Error] - Error during parsing of config.json. Set default values for logLevelNodeRED.');
+      logLevelNodeRED = logLevelNodeREDDefault;
+    }
+  }
+  console.log('' + timestamp().format_NodeRed + ' - ' +'[s7comm-Info] - Debug configuration for logLevelNodeS7:' + JSON.stringify(logLevelNodeS7));
+  console.log('' + timestamp().format_NodeRed + ' - ' +'[s7comm-Info] - Debug configuration for logLevelNodeRED:' + JSON.stringify(logLevelNodeRED));
+}
+// set Configuration once Node-RED parses the file
+setConfiguration();
+
+
+// helper functions
 /**
  * @description This function returns the time as an object in three different formats
  * @returns {} time as object with parameters:
@@ -36,48 +90,22 @@ const logLevelNodeRED = {
  */
 function timestamp() {
   const myDate = new Date();
-  var month = myDate.getMonth() + 1;
+  let month = myDate.getMonth() + 1;
 
   switch (month) {
-    case 1:
-      month = 'Jan';
-      break;
-    case 2:
-      month = 'Feb';
-      break;
-    case 3:
-      month = 'Mar';
-      break;
-    case 4:
-      month = 'Apr';
-      break;
-    case 5:
-      month = 'May';
-      break;
-    case 6:
-      month = 'Jun';
-      break;
-    case 7:
-      month = 'Jul';
-      break;
-    case 8:
-      month = 'Aug';
-      break;
-    case 9:
-      month = 'Sep';
-      break;
-    case 10:
-      month = 'Oct';
-      break;
-    case 11:
-      month = 'Nov';
-      break;
-    case 12:
-      month = 'Dec';
-      break;
-    default:
-      month = 'Jan';
-      break;
+    case 1: month = 'Jan'; break;
+    case 2: month = 'Feb'; break;
+    case 3: month = 'Mar'; break;
+    case 4: month = 'Apr'; break;
+    case 5: month = 'May'; break;
+    case 6: month = 'Jun'; break;
+    case 7: month = 'Jul'; break;
+    case 8: month = 'Aug'; break;
+    case 9: month = 'Sep'; break;
+    case 10: month = 'Oct'; break;
+    case 11: month = 'Nov'; break;
+    case 12: month = 'Dec'; break;
+    default: month = 'Jan'; break;
   }
   return {
     format_Object: myDate,
@@ -122,11 +150,11 @@ function isNumeric(n) {
  *  console.log(isFloat('1a'))  //false
  *  console.log(isFloat(true))  //false
  */
-function isFloat( value ) {
-	if ( typeof value === 'number') {
-		return ( value%1 !== 0 );
-	}
-	return false;
+function isFloat(value) {
+  if (typeof value === 'number') {
+    return (value % 1 !== 0);
+  }
+  return false;
 }
 
 /**
@@ -143,11 +171,11 @@ function isFloat( value ) {
  * //within the src-code
  * outputLog('always_shown');
  * outputLog('[node-Error]- message',0);
- * outputLog('[node-Warning]- message',1);
+ * outputLog('[s7comm-Warning]- message',1);
  * outputLog('[node-Info]- message',2);
  */
 function outputLog(txt, debugLevel, id) {
-  var idtext = '';
+  let idtext = '';
   const time = timestamp().format_NodeRed;
   // var time=process.hrtime();
 
@@ -161,9 +189,12 @@ function outputLog(txt, debugLevel, id) {
     idtext = ' ' + id;
   }
 
-
   if (typeof (debugLevel) === 'undefined' || logLevelNodeRED.debug >= debugLevel) {
-    console.log('[' + time + idtext + '] ' + util.format(txt));
+    if (debugLevel === 0) {
+      console.log('' + time + idtext + ' - ' + util.format(txt).red.bold);
+    } else {
+      console.log('' + time + idtext + ' - ' + util.format(txt).green.bold);
+    }
   }
 }
 
@@ -176,1012 +207,981 @@ function outputLog(txt, debugLevel, id) {
  * FilledArray(3,'0');  //returns ['0','0','0']
  */
 function FilledArray(len, val) {
-  var array = [];
-  for (var i = 0; i < len; i++) {
+  const array = [];
+  for (let i = 0; i < len; i++) {
     array[i] = val;
   }
   return array;
 }
 
+function customStringify(v) {
+  const cache = new Map();
+  return JSON.stringify(v, (key, value) => {
+    if (typeof value === 'object' && value !== null) {
+      if (cache.has(value)) {
+        // Circular reference found, discard key
+        return;
+      }
+      // Store value in our map
+      cache.set(value, true);
+    }
+    return value;
+  });
+}
+
 /**
  * @description This function returns the minimum of an Array
- * @param	{Array} - Array of numbers only!! 			
- * @returns	{Number} - Minimum Value of the input Array
+ * @param {Array} - Array of numbers only
+ * @returns {Number} - Minimum Value of the input Array
  * @examples
  * Array.min([1,2,3,4])
  * //returns 1
  */
 Array.min = function (array) {
   return Math.min.apply(Math, array);
-};
-
-/**
- * @description Create due to some random Error a list filled with Bad 255 from the 
- * nodes7 parameter polledReadBlockList which consist all items of the polling list
- * @param {Object} nodeS7.polledReadBlockList - Parameter comes from NodeS7 Object within the library!
- * @todo finish documentation
- * @returns	{Object} 
- * @example
- * var x=createBadList(nodeS7.polledReadBlockList)
- * //returns {'MB0':['BAD 255'],'QB0-3':['BAD 255','BAD 255','BAD 255']}
- */
-function createBadList(S7_List) {
-  var arr = [];
-  var obj = {};
-  var ret = {};
-  for (var i = 0; i < S7_List.length; i++) {
-    obj.signal = S7_List[i].useraddr;
-    obj.arrLen = S7_List[i].arrayLength;
-    arr[i] = obj;
-    obj = {};
-  }
-  for (var j = 0; j < arr.length; j++) {
-    ret[arr[j].signal] = FilledArray(arr[j].arrLen, 'BAD 255');
-  }
-  return ret;
 }
 
-/**
- * @description Checks the range of the writing value and sets it in case of an overloaded value to a valid one 
- * @param {Object} node - A node object from the Node-RED Instance
- * @param {Array} val- The writing values that comes from the HTML-side.
- * @returns {Array} The (corrected)value that you are actually writing to the PLC
- * @example
- * 	checkWritingValue(node,[1,3,256]); //return [1,3,1] in case of Bytes
- */	
-function checkWritingValue(node, val) {
-  var ret = null;
-  var tmp = [];
-  var err = null;
-  var fatalError = false;
-
-  for (var i = 0; i < val.length; i++) {
-    tmp[i] = val[i];
-    err = false;
-    if (node.rcvData.S7_Datatype == 'B' || node.rcvData.S7_Datatype == 'uint8') { // Byte=0x00 <= Byte <= 255
-      if (val[i] < 0x00) {
-        // err=true;
-        tmp[i] = 0;
-      } else {
-        tmp[i] = val[i] % (255 + 1);
-      }
-    }
-    if (node.rcvData.S7_Datatype == 'W' || node.rcvData.S7_Datatype == 'uint16') { // Word=0x0000 <= Word <= 65535
-      if (val[i] < 0) {
-        // err=true;
-        tmp[i] = 0;
-      } else {
-        tmp[i] = val[i] % (65535 + 1);
-      }
-    }
-    if (node.rcvData.S7_Datatype == 'D' || node.rcvData.S7_Datatype == 'uint32') { // 0x00000000 <= DWord <= 4294967295
-      if (val[i] < 0) {
-        // err=true;
-        tmp[i] = 0;
-      } else {
-        tmp[i] = val[i] % (4294967295 + 1);
-      }
-    }
-    if (node.rcvData.S7_Datatype == 'I' || node.rcvData.S7_Datatype == 'int16') { // -32768 <= INT <= 32767
-      if (val[i] < 0) {
-        tmp[i] = val[i] % (32768 + 1);
-      } else if (val[i] > 0) {
-        tmp[i] = val[i] % (32767 + 1);
-      } else {
-        tmp[i] = val[i] % (32767 + 1);
-      }
-    }
-
-    if (node.rcvData.S7_Datatype == 'DI' || node.rcvData.S7_Datatype == 'int32') { // -2147483648 <= INT <= 2147483647	
-      if (val[i] < 0) {
-        tmp[i] = val[i] % (2147483648 + 1);
-      } else if (val[i] > 0) {
-        tmp[i] = val[i] % (2147483647 + 1);
-      } else {
-        tmp[i] = val[i] % (2147483647 + 1);
-      }
-    }
-    if (node.rcvData.S7_Datatype == 'X') {
-      if (typeof (val[i]) != 'boolean') {
-        fatalError = true;
-      }
-    }
-    if (node.rcvData.S7_Datatype == 'CHAR') {
-      var x = '';
-      if (typeof (val[i]) != 'string') {
-        fatalError = true;
-      } else {
-        if ((val[i]).length > 1) {
-          err = true;
-          x = (val[i]).slice(0, 1);
-        } else {
-          x = val[i];
-        }
-        if (x === '') {
-          tmp[i] = ' ';
-        } else {
-          tmp[i] = x;
-        }
-      }
-    }
-    if (node.rcvData.S7_Datatype == 'STRING') {
-      if (typeof (val[i]) != 'string') {
-        fatalError = true;
-      } else {
-        if ((val[i]).length > node.rcvData.S7_Quantity) {
-          err = true;
-          tmp[i] = (val[i]).slice(0, node.rcvData.S7_Quantity);
-        }
-      }
-    }
-    if (node.rcvData.S7_Datatype == 'R') {
-      if (isNumeric(val[i])) {
-        tmp[i] = val[i];
-      } else {
-        tmp[i] = 0;
-        err = true;
-      }
-    }
-    if (node.rcvData.S7_Datatype == 'TIMER') {
-      //TODO: Validate Value
-    }
-    if (node.rcvData.S7_Datatype == 'COUNTER') {
-      //TODO: Validate Value
-    }
-  }
-  if (fatalError === true) {
-    ret = null;
-  } else {
-    // writingValue is always an array so redefine item
-    if (node.rcvData.S7_Quantity > 1) {
-      // cut off the overload of the array
-      if (isNumeric(node.rcvData.S7_Quantity)) {
-        ret = {
-          'error': err,
-          'value': [tmp.slice(0, parseInt(node.rcvData.S7_Quantity))],
-        };
-        if (node.rcvData.S7_Datatype == 'CHAR' || node.rcvData.S7_Datatype == 'STRING') {
-          ret = { 'error': err, 'value': tmp };
-        } else {
-          ret = {
-            'error': err,
-            'value': [tmp.slice(0, parseInt(node.rcvData.S7_Quantity))],
-          };
-        }
-      } else {
-        // value of Quantity Field is not a number
-        tmp[i] = 0;
-        err = true;
-      }
-    } else {
-      ret = { 'error': err, 'value': tmp };
-    }
-  }
-  return ret;
-}
-
-/**
- * @description NodeS7 is using for read Requests a polling list. See API.
- * This function is used for having access to the API-Function addItems and removeItems to work with the nodes7 internal polling list.
- * @param {Object} node - A node object from the Node-RED Instance
- * @param {String} choose - use 'add' for adding an item into the list and 'remove' for removing an item from the list
- * @example
- * pollinglist(node,'add')
- */
-function pollinglist(node, choose) {
-  var arr = [];
-  arr.push(node.wrappedData);
-  if (choose === 'add') {
-    node.NodeConfig.sps.addItems(arr);
-  } else if (choose === 'remove') {
-    node.NodeConfig.sps.removeItems(arr);
-  }
-}
-
-/**
- * @description Give this function an S7 Object and it'll return the Datatype.
- * @param	{Object} S7Object - The S7-Object that comes from the HTML-Page
- * @param 	{Number} choose -  Choose 0 or 1 for different format. 1 for using with DB, 0 for using with the rest
- * @returns {String} A string that shows the Datatype of the input Signal
- * @todo Extend this Function when using more Datatypes e.g Int,DInt ...
- * @example 
- * getDataTypeAsString(S7Object,1)  //S7Object={S7_Type:'' ,S7_DBnum:'0',S7_Datatype:'',S7_Offset:'0',S7_BitOffset:'0',S7_Quantity:'0',S7_Name:''}
- * //returns BYTE
- */	
-function getDataTypeAsString(S7Object, choose) {
-  var ret = '';
-  //	possible cases are grabbed from the Node-RED HTML file. Object operators2 within oneditprepare in the configuration part!!
-  switch (S7Object.S7_Datatype) {
-    case 'X':
-      if (choose === 1) {
-        ret = 'X';
-      }
-      if (choose === 0) {
-        ret = 'X';
-      }
-      break;
-    case 'B':
-    case 'uint8':
-      if (choose == 1) {
-        ret = 'BYTE';
-      }
-      if (choose === 0) {
-        ret = 'B';
-      }
-      break;
-    case 'W':
-    case 'uint16':
-      if (choose === 1) {
-        ret = 'WORD';
-      }
-      if (choose === 0) {
-        ret = 'W';
-      }
-      break;
-    case 'D':
-    case 'uint32':
-      if (choose === 1) {
-        ret = 'DWORD';
-      }
-      if (choose === 0) {
-        ret = 'D';
-      }
-      break;
-    case 'I':
-    case 'int16':
-      if (choose === 1) {
-        ret = 'INT';
-      }
-      if (choose === 0) {
-        ret = 'I';
-      }
-      break;
-    case 'DI':
-    case 'int32':
-      if (choose === 1) {
-        ret = 'DINT';
-      }
-      if (choose === 0) {
-        ret = 'DI';
-      }
-      break;
-    case 'CHAR':
-      if (choose === 1) {
-        ret = 'CHAR';
-      }
-      if (choose === 0) {
-        ret = 'C';
-      }
-      break;
-    case 'STRING':
-      if (choose === 1) {
-        ret = 'STRING';
-      }
-      if (choose === 0) {
-        ret = 'S';
-      }
-      break;
-    case 'R':
-      if (choose === 1) {
-        ret = 'REAL';
-      }
-      if (choose === 0) {
-        ret = 'R';
-      }
-      break;
-    case 'TIMER':
-      if (choose === 1) {
-        ret = 'TIMER';
-      }
-      if (choose === 0) {
-        ret = 'TIMER';
-      }// placeholder!
-      break;
-    case 'COUNTER':
-      if (choose === 1) {
-        ret = 'COUNTER';
-      }
-      if (choose === 0) {
-        ret = 'COUNTER';
-      }// placeholder!
-      break;
-    default:
-      ret = undefined;
-  }
-  return ret;
-}
-
-/**
- * @description NodeS7 has it's own Syntax for a Request. This Function creates the Syntax for a NodeS7-Request.
- * @param	{Object} S7Object - The S7-Object that comes from the HTML-Page
- * @param {String} choose - use 'data' for ... and 'path' for ...
- * @returns {String} A string that defines the Syntax for the Request
- * @todo Extend this Function when using more Datatypes e.g Int,DInt ...
- * @example 
- * wrapData(S7Object)(S7Object)
- * //returns EB0 => S7Object={S7_Type:'' ,S7_DBnum:'0',S7_Datatype:'',S7_Offset:'0',S7_BitOffset:'0',S7_Quantity:'0',S7_Name:''}
- */
-function wrapData(S7Object, choose) {
-  var ret = S7Object;
-  switch (S7Object.S7_Type) {
-    case 'I':
-    case 'Q': // X,BYTE,WORD,DWORD,INT,DINT,CHAR,STRING,R,TIMER,COUNTER
-    case 'M':
-    case 'PI':
-    case 'PQ':
-      if (S7Object.S7_Datatype == 'X') {
-        // Bool
-        ret = S7Object.S7_Type + S7Object.S7_Offset + '.' + S7Object.S7_BitOffset;// I0.0	
-      } else if (S7Object.S7_Datatype == 'CHAR') {
-        // CHAR
-        ret = S7Object.S7_Type + getDataTypeAsString(S7Object, 0) + S7Object.S7_Offset;	// MC0
-      } else {
-        // BYTE,WORD,DWORD,INT,DINT,STRING,R,TIMER,COUNTER
-        if (S7Object.S7_Quantity > 1) {
-          if (choose === 'path') {
-            ret = S7Object.S7_Type + getDataTypeAsString(S7Object, 0) + S7Object.S7_Offset + '..' + (S7Object.S7_Quantity - 1);	// IB0-IBx into IB0..x
-          } else if (choose === 'data') {
-            ret = S7Object.S7_Type + getDataTypeAsString(S7Object, 0) + S7Object.S7_Offset + '.' + S7Object.S7_Quantity;		// IB0-IBx into IB0.x
-          } else {
-            ret = null;
-          }
-        } else {
-          ret = S7Object.S7_Type + getDataTypeAsString(S7Object, 0) + S7Object.S7_Offset;	// IB0
-        }
-      }
-      break;
-    case 'DB':
-      if (S7Object.S7_Datatype == 'X') {
-        // Bool
-        ret = S7Object.S7_Type + S7Object.S7_DBnum + ',' + getDataTypeAsString(S7Object, 1) + S7Object.S7_Offset + '.' + S7Object.S7_BitOffset;	// DB10.DBX0.1  into  DB10,X0.1
-      } else if (S7Object.S7_Datatype == 'CHAR') {
-        // CHAR
-        ret = S7Object.S7_Type + S7Object.S7_DBnum + ',' + getDataTypeAsString(S7Object, 1) + S7Object.S7_Offset;// DB10.DBC0 into 'DB10,CHAR0'
-      } else {
-        // BYTE,WORD,DWORD,INT,DINT,STRING,R,TIMER,COUNTER
-        if (S7Object.S7_Quantity > 1) {
-          // Quantity >1 (array)
-          if (choose === 'path') {
-            ret = S7Object.S7_Type + S7Object.S7_DBnum + ',' + getDataTypeAsString(S7Object, 1) + S7Object.S7_Offset + '..' + (S7Object.S7_Quantity - 1);// DB10.DBW0-DB10.DBW2   into 'DB10,WORD1..2'
-          } else if (choose === 'data') {
-            ret = S7Object.S7_Type + S7Object.S7_DBnum + ',' + getDataTypeAsString(S7Object, 1) + S7Object.S7_Offset + '.' + S7Object.S7_Quantity;// DB10.DBW0-DB10.DBW2   into 'DB10,WORD1.2'
-          } else {
-            ret = null;// default
-          }
-        } else {
-          ret = S7Object.S7_Type + S7Object.S7_DBnum + ',' + getDataTypeAsString(S7Object, 1) + S7Object.S7_Offset;// DB10.DBW0 into 'DB10,WORD1'
-        }
-      }
-      break;
-    case 'T':
-      ret = S7Object.S7_Type + S7Object.S7_Offset;
-      break;
-    case 'C':
-      ret = S7Object.S7_Type + S7Object.S7_Offset;
-      break;
-    default:
-      ret = null;
-  }
-  return ret;
-}
-
-/**
- * @description This function analyses the response of the PLC. It is used within a callback in the node
- * @param {Object} node - A node object from the Node-RED Instance
- * @example
- * read(node,function(retNode){
- *    readingComplete(retNode);
- * });
- */
-function readingComplete(node) {
-  var tmp = null;// buffer for receiving val {anythingBad:bool,values: { MB1: 5, MW10: 4, etc }}
-  node.NodeConfig.readJSON = getJSON('error', node, null, -1, [null]);
-
-  if (node.wrappedData === null) {
-    outputLog('[node-Error] - No Signal selected within the reading node', 1);
-  } else {
-    if (Object.keys(node.NodeConfig.readDataBuffer).length === 0 && node.NodeConfig.readDataBuffer.constructor === Object) { // Check if DataBuffer is empty (ECMA 5+)
-      outputLog('[node-Error] - No response values from reading request available', 1);
-    } else {
-      tmp = checkReceivedData(node);
-      node.NodeConfig.readJSON = getJSON('read', node, node.rcvData.S7_Name, tmp.err, tmp.arr);
-    }
-  }
-  // if(tmp.err<0){node.status({fill:'yellow',shape:'dot',text:'error'});}
-  node.send(node.NodeConfig.readJSON);
-}
-
-/**
- * @description This function checks the return object of a reading process and sets the the Quality and value in a defined form.
- * The Node-RED node contains a parameter which represent the return value of an reading process see example.  
- * @param {Object} node - A node object from the Node-RED Instance
- * @returns {Object} - Obj.err=Errorvalue (Type=number; Obj.arr=Returnvalue(Type=Array)
- * @example
- * checkReceivedData(node); //With obj={anythingBad: false,values:{ 'DB11102,BYTE14.4':[ 3, 2, 97, 98 ]}} as return object of reading request
- * //return {err:0,arr:[ 3, 2, 97, 98 ]}
- */
-function checkReceivedData(node) {
-  var ret = { err: -1, arr: [null] };
-  const data = node.NodeConfig.readDataBuffer;
-
-  if (node && data.values) {
-    const tmpVal = data.values[node.wrappedData];
-    // A response value (tmpVal) can either be:
-    // decimal value or string 'BAD 255' if an Error occured
-    // single Item or Array if the Quantity is >1
-    if (tmpVal !== undefined) {
-      if (data.anythingBad === false) { // no Error
-        ret.err = 0;
-        if (!Array.isArray(tmpVal)) { // single value!
-          ret.arr = [tmpVal];
-        }
-        if (Array.isArray(tmpVal)) { // array!
-          ret.arr = tmpVal;
-        }
-      } else if (data.anythingBad === true) { // Error
-        if (!Array.isArray(tmpVal)) { // single value!
-          if (tmpVal === undefined || tmpVal === 'BAD 255') {
-            ret.err = -1;
-            ret.arr = [null];
-          } else {
-            ret.err = 0;
-            ret.arr = [tmpVal];
-          }
-        }
-        if (Array.isArray(tmpVal)) {			// array!
-          ret.err = 0;
-          for (var i in tmpVal) {
-            if (tmpVal[i] === undefined || tmpVal[i] === 'BAD 255') {
-              ret.err = -1;
-              ret.arr[i] = null;
-            } else {
-              ret.arr[i] = tmpVal[i];
-            }
-          }
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-/**
- * @description This function returns a JSON Object which is used for sending to the nodes output
- * @param {String} request- use 'read', 'write' or 'error' for the different Requests
- * @param {Object} node- A node object from the Node-RED Instance
- * @param {String} sig- Name of the signal within S7-Object
- * @param {Number} err- Errorvalue of PLC response (comes from checkReceivedData)
- * @param {Array} val- Return value of PLC response(comes from checkReceivedData)
- * @returns {Object} JSON-Object of each Request
- * @example
- * var a=getJSON('write',node,'node.S7_Name',err,val); //define data as JSON
- * var b=getJSON('error',node,null,-1,[null]); //ERRORHANDLING
- * var c=getJSON(); //an empty JSON object
- */
-function getJSON(request, node, sig, err, val) {
-  // 'read',node.topic,rcvData,wrappedData,Quality,value
-  var ret = {
-    topic: '',
-    payload:{
-      signal: '',
-      path: '',
-      error: -1,
-      value: '',
-    },
-  };
-  if (request === 'read' || request === 'write') {
-    ret = {
-      topic: node.topic,
-      payload: {
-        signal: sig,
-        path: node.wrappedPath,
-        error: err,
-        value: val,
-      },
-    };
-  } else if (request === 'error') {
-    ret = {
-      topic: node.topic,
-      payload: {
-        signal: sig,
-        path: null,
-        error: -1,
-        value: val,
-      },
-    };
-  }
-  return ret;
-}
-
-/**
- * @description Connection Handler for multiple NodeS7-Instances.
- * @requires nodes7,events
-*/
-var connectionPool = function () {
-  var connections = {};
-  return {
-    createInstance: function (id) {
-      if (!connections[id]) {
-			  connections[id] = function () {
-          const mySPS = new NodeS7(logLevelNodeS7);
-          var state = null;
-			    var interval_id = null;
-          var param = null;
-          var obj = {
-            _instances: 0,
-            // API nodeS7
-            initiateConnection: function (item, cb) {
-              outputLog('[node-Function] - initiateConnection of '+id, 3);
-              param = item;
-              mySPS.initiateConnection(item, cb);
-            },
-            dropConnection: function (done) {
-              outputLog('[node-Function] - dropConnection of '+id, 3);
-              mySPS.isoclient.destroy();
-              mySPS.connectionCleanup();
-              obj.clearRessouces();
-              done();
-            },
-            setTranslationCB: function (trans) {
-              outputLog('[node-Function] - setTranslationCB of '+id, 3);
-              mySPS.setTranslationCB(items);
-            },
-            addItems: function (items) {
-              outputLog('[node-Function] - addItems of '+id, 3);
-              mySPS.addItems(items);
-            },
-            removeItems: function (items) {
-              outputLog('[node-Function] - removeItems of '+id, 3);
-              mySPS.removeItems(items);
-            },
-            readAllItems: function (cb) {
-              outputLog('[node-Function] - readAllItems of '+id, 3);
-              mySPS.readAllItems(cb);
-            },
-            writeItems: function (items, values, cb) {
-              outputLog('[node-Function] - writeItems of '+id, 3);
-              mySPS.writeItems(items, values, cb);
-            },
-            // 
-            startWatchingStates: function () {
-              outputLog('[node-Function] - startWatchingStates of '+id, 3);
-              obj.stopWatchingStates();
-              interval_id = setInterval(function () {
-                state = mySPS.isoConnectionState;
-                if (state === 0 && mySPS.isoclient._connecting === false) {
-                  obj.emitter.emit('apiState0', {});
-                }// State disconencted & socket not connecting!
-                if (state === 1) {
-                  obj.emitter.emit('apiState1', {});
-                }// trying to connect
-                if (state === 2) {
-                  obj.emitter.emit('apiState2', {});
-                }// tcp connected, wait for rfc1006 connection
-                if (state === 3) {
-                  obj.emitter.emit('apiState3', {});
-                }// rfc1006 connected, wait for pdu
-                if (state === 4) {
-                  obj.emitter.emit('apiState4', {});
-                }// connected
-              }, 1000);	// endinterval
-            },
-            stopWatchingStates: function () {
-              outputLog('[node-Function] - stopWatchingStates of '+id, 3);
-              if (interval_id !== null) {
-                clearInterval(interval_id);
-                interval_id = null;
-              }
-            },
-            clearRessouces: function () {
-                outputLog('[node-Function] - clearRessouces of '+id, 3);
-                obj.stopWatchingStates();
-
-                obj.emitter.removeAllListeners('apiState0');
-                obj.emitter.removeAllListeners('apiState1');
-                obj.emitter.removeAllListeners('apiState2');
-                obj.emitter.removeAllListeners('apiState3');
-                obj.emitter.removeAllListeners('apiState4');
-
-                //if (connections != null) {connections = {};}
-            },
-            // methods for Event-Handling
-            emitter: new events.EventEmitter(),
-            on: function (a, b) {
-              this.emitter.on(a, b);
-            },				
-            // internal NodeS7 functions for analysing purpose
-            isoConnectionState: function () {
-              return mySPS.isoConnectionState;
-            },
-            isoclient: function () {
-              return mySPS.isoclient;
-            },
-            resetNow: function () {
-              return mySPS.resetNow();
-            },
-            polledReadBlockList: function () {
-              return mySPS.polledReadBlockList;
-            },
-          };
-          return obj;
-        }();
-        connections[id]._instances += 1;
-      }
-      return connections[id];
-    },
-  };
-}();
 
 /**
  * @summary The actual Node-RED node consisting of read, write and config node.
  */
-module.exports = function (RED) {
+module.exports = (RED) => {
   function S7Configuration(n) {
     RED.nodes.createNode(this, n);
 
-    // Configuration Params passed by Node Red
-    this.sps = connectionPool.createInstance(n.id);// Configuration from connection pool 
+    outputLog('[s7comm-Warning] - Start a new Configuration: ' + n.id, 1);
+    // Configuration options passed by Node Red
     this.id = n.id;
-    this.RFCParam = { port: n.port, host: n.ip, rack: n.rack, slot: n.slot };
-    this.payload = n.payload;
-    
-    // Configuration Params and flags for local usage
-    var node = this;
-
-    var intervalNodes = 0;
-    var error = null;
-    var readingInterval = null;
-
-    node.connected = false;
-    node.connecting = false;
-    node.closing = false;  // unused
-
-    node.reading = false;  // reading Flag
-    node.readQueue = [];
-
-    node.writing = false;  // writing Flag
-    node.writeQueue = [];
-
-    node.users = {};  // a list of all nodes wich are using these Configuration
-    node.readDataBuffer = {};  // a Buffer for the answer
-
-    node.emptyBuffer = getJSON();  // an empty JSON object for Error handling
-    node.readJSON = {};  // a Buffer for reading JSON
-    node.writeJSON = {};  // a Buffer for writing JSON
-    node.cnt = {};  // buffer for calc within register method
-    node.intervalTime = 1000;  // default Value
-
-    var connect = function () {
-      node.connecting = true;
-      node.connected = false;
-      node.sps.initiateConnection(node.RFCParam, onPlcCallback);
-
-      // State handlers
-      node.sps.on('apiState0', function () {		// disconencted
-        outputLog('[node-Warning] - PLC disconnected, trying to reconnect', 1);
-        node.connected = false;
-        for (var id in node.users) {
-          if (node.users.hasOwnProperty(id)) {
-            node.users[id].status({
-              fill: 'red',
-              shape: 'dot',
-              text: 'disconnected',
-            });
-          }
-        }
-        // Reconnect
-        // Check: -----------    API-Flags    --------------  &&  -------  TCP-Flags (bypass NodeS7 API and get information about TCP-Stack)-------
-        if (node.connecting === false && node.connected === false && node.sps.isoclient()._connecting === false && node.sps.isoclient().destroyed === true) {
-          outputLog('[node-Warning] - TCP reconnection is starting', 1);
-          node.connecting = true;
-          node.sps.stopWatchingStates();
-          node.sps.resetNow(); // reset NodeS7 to clear resetPending flag!
-          setTimeout(function () {
-            node.sps.initiateConnection(node.RFCParam, onPlcCallback);
-          }, 1500); // Timeout has to be 1,5 sec because withing resetNow there's also an 1,5 sec timeout
-        } else {
-          outputLog('[node-Warning] - TCP is already connecting', 1);
-        }
-      });
-      node.sps.on('apiState1', function () {		// trying to connect
-        node.connected = false;
-        for (var id in node.users) {
-          if (node.users.hasOwnProperty(id)) {
-            node.users[id].status({
-              fill: 'blue',
-              shape: 'dot',
-              text: 'TCP connecting',
-            });
-          }
-        }
-      });
-      node.sps.on('apiState2', function () {		// tcp connected, wait for rfc1006	
-        node.connected = false;
-        for (var id in node.users) {
-          if (node.users.hasOwnProperty(id)) {
-            node.users[id].status({
-              fill: 'blue',
-              shape: 'ring',
-              text: 'RFC1006 connecting',
-            });
-          }
-        }
-      });
-      node.sps.on('apiState3', function () {		// rfc connected, wait for pdu	
-        node.connected = false;
-        for (var id in node.users) {
-          if (node.users.hasOwnProperty(id)) {
-            node.users[id].status({
-              fill: 'blue',
-              shape: 'dot',
-              text: 'S7 initializing',
-            });
-          }
-        }
-      });
-      node.sps.on('apiState4', function () {		// connected
-        for (var id in node.users) {
-          if (node.users.hasOwnProperty(id)) {
-            if (node.users[id].RW_Error === true) {
-              node.users[id].status({
-                fill: 'yellow',
-                shape: 'dot',
-                text: 'RW/Error',
-              });
-              node.users[id].RW_Error = false;
-            } else {
-              node.users[id].status({
-                fill: 'green',
-                shape: 'dot',
-                text: 'connected',
-              });
-            }
-            // node.users[id].status({fill:'green',shape:'dot',text:'connected'});
-          }
-        }
-      });
+    this.RFCParam = {
+      port: n.port,
+      host: n.ip,
+      rack: n.rack,
+      slot: n.slot,
     };
+    this.payload = n.payload;
 
-    var onPlcCallback = function (err) {
-      node.connecting = false;
-      if (typeof (err) !== 'undefined') {
-        outputLog('[node-Error] - Error during Connection Establishment to ' + node.RFCParam.host.toString(), 0);
-        node.connected = false;
-        error = err;
+    // Local options
+    const node = this;
+    node.users = {}; // a list of all nodes wich are using these Configuration
+    node.plc = null; // handle for nodes7 instance
+    node.status = {
+      rwCyclError: false, // Patch. Flag can be removed when connectionError is fixed
+      connected: null,
+      connecting: null,
+      reading: null,
+      writing: null,
+      keepAliveRunning: false,
+      handleConnectionTimeout: null,
+      handleStateInterval: null,
+      handleLocalTimeout: null,
+      readingInterval: null, // Handle for reading interval
+      stateIntervalHandle: null,
+      numOfReadNodes: 0,
+      numOfReadIntervallNodes: 0,
+      readCyclArray: [],
+      readIntervalTime: 0,
+      numOfWriteNodes: 0,
+    };
+    node.readQueue = [];
+    node.writeQueue = [];
+    node.readJSON = {};// a Buffer for reading JSON
+    node.writeJSON = {};// a Buffer for writing JSON
+    node.readDataBuffer = { // Buffer for nodes7 response
+      anythingBad: null,
+      values: null,
+    };
+    node.readJSON = {};// a Buffer for reading JSON
+    node.writeJSON = {};// a Buffer for writing JSON
 
-       // node.sps.initiateConnection(node.RFCParam, onPlcCallback);
-        
-      } else {
-        outputLog('[node-Info] - Connection Established to PLC ' + node.RFCParam.host.toString() + ':' + node.RFCParam.port.toString(), 2);
-        node.connected = true;
-        error = null;
+    // Private methods (usage only within config node)
+    // helper
+    function printStatus() {
+      const cli = {
+        address: null,
+        bufferSize: null,
+        bytesRead: null,
+        bytesWritten: null,
+        connecting: null,
+        destroyed: null,
+        localAddress: null,
+        localPort: null,
+        remoteAddress: null,
+        remoteFamily: null,
+        remotePort: null,
+      };
+      const information = {
+        connection: null,
+        status: null,
+        client: null,
+      };
+      let client = null;
 
-        for (var id in node.users) {
-          if (node.users.hasOwnProperty(id) && node.users[id].none == 'false') {
-            intervalNodes++;// count the Quantity of interval reading nodes 
-          }
-        }
-
-        // Start interval reading here if (interval-)reading nodes are available (triggered once!) and PLC-State=4(connected)
-        if (node.cnt.read >= 1 && intervalNodes >= 1 && node.sps.isoConnectionState() === 4) {
-          node.triggerIntervalReading(node);
-        }
-
-        // set KeepAlive 
-        outputLog('[node-Info] - Start KeepAlive', 2);
-        var KeepAlive = node.sps.isoclient().setKeepAlive(true, 10000);
-		
+      if (node.plc && node.plc.isoclient) {
+        client = node.plc.isoclient;
+        cli.address = client.address();
+        cli.bufferSize = ((client.bufferSize) ? (client.bufferSize) : (null));
+        cli.bytesRead = ((client.bytesRead) ? (client.bytesRead) : (null));
+        cli.bytesWritten = ((client.bytesWritten) ? (client.bytesWritten) : (null));
+        cli.connecting = ((client.connecting) ? (client.connecting) : (null));
+        cli.destroyed = ((client.destroyed) ? (client.destroyed) : (null));
+        cli.localAddress = ((client.localAddress) ? (client.localAddress) : (null));
+        cli.localPort = ((client.localPort) ? (client.localPort) : (null));
+        cli.remoteAddress = ((client.remoteAddress) ? (client.remoteAddress) : (null));
+        cli.remoteFamily = ((client.remoteFamily) ? (client.remoteFamily) : (null));
+        cli.remotePort = ((client.remotePort) ? (client.remotePort) : (null));
       }
 
-      node.sps.startWatchingStates();
-    };
+      information.connection = node.RFCParam;
+      information.status = node.status;
+      information.client = cli;
 
-    var singleReading = function (callback) {
-      var nextElem = node.readQueue.shift();
+      const ret = customStringify(information);
+      // var ret = util.inspect(information);
+      return ret;
+    }
+
+    function setStatus(sStatus) {
+      outputLog('[s7comm-Function] - setStatus (New status:' + sStatus + '). Configuration:[' + node.id + '].', 3);
+      if (typeof (sStatus) === 'string') {
+        switch (sStatus) {
+          case 'connected':
+            for (var id in node.users) {
+              if (node.users.hasOwnProperty(id)) {
+                node.users[id].status({ fill: 'green', shape: 'dot', text: 'connected', });
+              }
+            }
+            break;
+          case 'connecting':
+            for (var id in node.users) {
+              if (node.users.hasOwnProperty(id)) {
+                node.users[id].status({ fill: 'blue', shape: 'dot', text: 'connecting', });
+              }
+            }
+            break;
+          case 'disconnected':
+            for (var id in node.users) {
+              if (node.users.hasOwnProperty(id)) {
+                node.users[id].status({ fill: 'red', shape: 'dot', text: 'disconnected', });
+              }
+            }
+            break;
+          case 'error':
+            for (var id in node.users) {
+              if (node.users.hasOwnProperty(id)) {
+                node.users[id].status({ fill: 'red', shape: 'dot', text: 'error', });
+              }
+            }
+            break;
+          default:
+            for (var id in node.users) {
+              if (node.users.hasOwnProperty(id)) {
+                node.users[id].status({ fill: 'red', shape: 'dot', text: 'unknown', });
+              }
+            }
+            break;
+        }
+      } else {
+        for (var id in node.users) {
+          if (node.users.hasOwnProperty(id)) {
+            node.users[id].status({ fill: 'red', shape: 'dot', text: 'unknown', });
+          }
+        }
+      }
+    }
+
+    function clearTimer(handle) {
+      switch (handle) {
+        case 'handleConnectionTimeout':
+          if (node.status.handleConnectionTimeout !== null) {
+            outputLog('[s7comm-Function] - Clear Timer: ' + handle, 3);
+            clearTimeout(node.status.handleConnectionTimeout);
+            node.status.handleConnectionTimeout = null;
+          }
+          break;
+        case 'handleStateInterval':
+          if (node.status.handleStateInterval !== null) {
+            outputLog('[s7comm-Function] - Clear Timer: ' + handle, 3);
+            clearInterval(node.status.handleStateInterval);
+            // clearImmediate(node.status.handleStateInterval);
+            node.status.handleStateInterval = null;
+          }
+          break;
+        case 'handleLocalTimeout':
+          if (node.status.handleLocalTimeout !== null) {
+            outputLog('[s7comm-Function] - Clear Timer: ' + handle, 3);
+            clearTimeout(node.status.handleLocalTimeout);
+            node.status.handleStateInterval = null;
+          }
+          break;
+        case 'readingInterval':
+          if (node.status.readingInterval !== null) {
+            outputLog('[s7comm-Function] - Clear Timer: ' + handle, 3);
+            clearInterval(node.status.readingInterval);
+            node.status.readingInterval = null;
+          }
+          break;
+        default:
+          outputLog('[s7comm-Error] - Error deleting Timer Handle. Unknown Handle: ' + handle, 0);
+          break;
+      }
+    }
+
+    /**
+     * @description This function returns a JSON Object which is used for sending to the nodes output
+     * @param {Object} node- A node object from the Node-RED Instance
+     * @param {String} path- Name of the signal within S7-Object
+     * @param {Number} err- Errorvalue of PLC response (comes from checkReceivedData)
+     * @param {Array} val- Return value of PLC response(comes from checkReceivedData)
+     * @returns {Object} JSON-Object of each Request
+     * @example
+     * var a=getJSON(node,'MB0...2', 0,[0,1,2]); //define data as JSON
+     * var b=getJSON(node,null     ,-1,[null]);  //Errorobject
+     */
+    function getJSON(myNode, s7path, err, val) {
+      const ret = {
+        topic: myNode.topic,
+        payload: {
+          signal: myNode.dataHandle.rcvData.S7_Name,
+          path: s7path,
+          error: err,
+          value: val,
+        },
+      };
+      return ret;
+    }
+
+    /**
+     * @description Give this function an S7 Object and it'll return the Datatype.
+     * @param {Object} S7Object - The S7-Object that comes from the HTML-Page
+     * @param {Number} choose -  Choose 0 or 1 for different format. 1 for using with DB, 0 for using with the rest
+     * @returns {String} A string that shows the Datatype of the input Signal
+     * @todo Extend this Function when using more Datatypes e.g Int,DInt ...
+     * @example 
+     * getDataTypeAsString(S7Object,1)  //S7Object={S7_Type:'' ,S7_DBnum:'0',S7_Datatype:'',S7_Offset:'0',S7_BitOffset:'0',S7_Quantity:'0',S7_Name:''}
+     * //returns BYTE
+     */
+    function getDataTypeAsString(S7Object, choose) {
+      let ret = '';
+      // cases grabbed from HTML file. Object operators2 within oneditprepare in the configuration part!!
+      switch (S7Object.S7_Datatype) {
+        case 'X':
+          ret = ((choose && choose === 'DB') ? ('X') : ('X'));
+          break;
+        case 'B':
+        case 'uint8':
+          ret = ((choose && choose === 'DB') ? ('BYTE') : ('B'));
+          break;
+        case 'W':
+        case 'uint16':
+          ret = ((choose && choose === 'DB') ? ('WORD') : ('W'));
+          break;
+        case 'D':
+        case 'uint32':
+          ret = ((choose && choose === 'DB') ? ('DWORD') : ('D'));
+          break;
+        case 'I':
+        case 'int16':
+          ret = ((choose && choose === 'DB') ? ('INT') : ('I'));
+          break;
+        case 'DI':
+        case 'int32':
+          ret = ((choose && choose === 'DB') ? ('DINT') : ('DI'));
+          break;
+        case 'CHAR':
+          ret = ((choose && choose === 'DB') ? ('CHAR') : ('C'));
+          break;
+        case 'STRING':
+          ret = ((choose && choose === 'DB') ? ('STRING') : ('S'));
+          break;
+        case 'R':
+          ret = ((choose && choose === 'DB') ? ('REAL') : ('R'));
+          break;
+        case 'TIMER':
+          ret = ((choose && choose === 'DB') ? ('TIMER') : ('TIMER'));// placeholder!
+          break;
+        case 'COUNTER':
+          ret = ((choose && choose === 'DB') ? ('COUNTER') : ('COUNTER'));// placeholder!
+          break;
+        default:
+          ret = undefined;
+      }
+      return ret;
+    }
+
+    /**
+     * @description NodeS7 has it's own Syntax for a Request. This Function creates the Syntax for a NodeS7-Request.
+     * @param {Object} S7Object - The S7-Object that comes from the HTML-Page
+     * @param {String} choose - use 'data' for ... and 'path' for ...
+     * @returns {String} A string that defines the Syntax for the Request
+     * @todo Extend this Function when using more Datatypes e.g Int,DInt ...
+     * @example
+     * wrapData(S7Object)(S7Object)
+     * //returns EB0 => S7Object={S7_Type:'' ,S7_DBnum:'0',S7_Datatype:'',S7_Offset:'0',S7_BitOffset:'0',S7_Quantity:'0',S7_Name:''}
+     */
+    function wrapData(S7Object, choose) {
+      let ret = S7Object;
+      switch (S7Object.S7_Type) {
+        case 'I':
+        case 'Q': // X,BYTE,WORD,DWORD,INT,DINT,CHAR,STRING,R,TIMER,COUNTER
+        case 'M':
+        case 'PI':
+        case 'PQ':
+          if (S7Object.S7_Datatype === 'X') {
+            // Bool
+            ret = S7Object.S7_Type + S7Object.S7_Offset + '.' + S7Object.S7_BitOffset;// I0.0
+          } else if (S7Object.S7_Datatype === 'CHAR') {
+            // CHAR
+            ret = S7Object.S7_Type + getDataTypeAsString(S7Object) + S7Object.S7_Offset;// MC0
+          } else {
+            // BYTE,WORD,DWORD,INT,DINT,STRING,R,TIMER,COUNTER
+            if (S7Object.S7_Quantity > 1) {
+              if (choose === 'path') {
+                // IB0-IBx into IB0..x
+                ret = S7Object.S7_Type + getDataTypeAsString(S7Object) + S7Object.S7_Offset + '..' + (S7Object.S7_Quantity - 1);
+              } else if (choose === 'data') {
+                // IB0-IBx into IB0.x
+                ret = S7Object.S7_Type + getDataTypeAsString(S7Object) + S7Object.S7_Offset + '.' + S7Object.S7_Quantity;
+              } else {
+                ret = null;
+              }
+            } else {
+              ret = S7Object.S7_Type + getDataTypeAsString(S7Object) + S7Object.S7_Offset;	// IB0
+            }
+          }
+          break;
+        case 'DB':
+          if (S7Object.S7_Datatype === 'X') {
+            // Bool
+            ret = S7Object.S7_Type + S7Object.S7_DBnum + ',' + getDataTypeAsString(S7Object, 'DB') + S7Object.S7_Offset + '.' + S7Object.S7_BitOffset;	// DB10.DBX0.1  into  DB10,X0.1
+          } else if (S7Object.S7_Datatype === 'CHAR') {
+            // CHAR
+            ret = S7Object.S7_Type + S7Object.S7_DBnum + ',' + getDataTypeAsString(S7Object, 'DB') + S7Object.S7_Offset;// DB10.DBC0 into 'DB10,CHAR0'
+          } else {
+            // BYTE,WORD,DWORD,INT,DINT,STRING,R,TIMER,COUNTER
+            if (S7Object.S7_Quantity > 1) {
+              // Quantity >1 (array)
+              if (choose === 'path') {
+                ret = S7Object.S7_Type + S7Object.S7_DBnum + ',' + getDataTypeAsString(S7Object, 'DB') + S7Object.S7_Offset + '..' + (S7Object.S7_Quantity - 1);// DB10.DBW0-DB10.DBW2   into 'DB10,WORD1..2'
+              } else if (choose === 'data') {
+                ret = S7Object.S7_Type + S7Object.S7_DBnum + ',' + getDataTypeAsString(S7Object, 'DB') + S7Object.S7_Offset + '.' + S7Object.S7_Quantity;// DB10.DBW0-DB10.DBW2   into 'DB10,WORD1.2'
+              } else {
+                ret = null;// default
+              }
+            } else {
+              ret = S7Object.S7_Type + S7Object.S7_DBnum + ',' + getDataTypeAsString(S7Object, 'DB') + S7Object.S7_Offset;// DB10.DBW0 into 'DB10,WORD1'
+            }
+          }
+          break;
+        case 'T':
+          ret = S7Object.S7_Type + S7Object.S7_Offset;
+          break;
+        case 'C':
+          ret = S7Object.S7_Type + S7Object.S7_Offset;
+          break;
+        default:
+          ret = null;
+      }
+      return ret;
+    }
+
+
+    // Connection Management
+    function disconnect(cb) {
+      outputLog('[s7comm-Function] - disconnect. Configuration:[' + node.id + '], Status: ' + printStatus(), 3);
+
+      stopWatchingStates();
+
+      if (node.plc) {
+        node.plc.dropConnection(() => {
+          outputLog('[s7comm-Warning] - Connection to PLC ' + node.RFCParam.host.toString() + ' dropped. Configuration:[' + node.id + '], Status: ' + printStatus(), 1);
+          setStatus('disconnected');
+          node.status.connected = false;
+          node.plc = null;
+          cb();
+        });
+      } else {
+        setStatus('disconnected');
+        node.status.connected = false;
+        process.nextTick(cb);
+      }
+    }
+
+    function connect() {
+      outputLog('[s7comm-Function] - connect. Configuration:[' + node.id + '].', 3);
+      // Make shure to close a possible instance
+      if (node.plc) {
+        outputLog('[s7comm-Warning] - Disconnect a prior connection first.', 1);
+        disconnect(connectNow);
+      } else {
+        process.nextTick(connectNow);
+      }
+    }
+
+    function connectNow() {
+      outputLog('[s7comm-Function] - connectNow. Configuration:[' + node.id + '], Status: ' + printStatus(), 3);
+
+      // Create new NodeS7 Instance
+      node.plc = new Nodes7(logLevelNodeS7);
+      // Patch nodes7 for our purposes !
+      node.plc.requestMaxParallel = 1;
+      node.plc.maxParallel = 1;
+
+      // Add Item here into the pollinglist
+      const arr = [];
+      for (let index = 0; index < node.payload.length; index++) {
+        const element = node.payload[index];
+        const data = wrapData(element, 'data');
+        arr.push(data);
+      }
+      node.plc.addItems(arr);
+      outputLog('[s7comm-Info] - New NodeS7 Instance created. Status: ' + printStatus(), 2);
+
+      // Connect
+      outputLog('[s7comm-Function] - initiateConnection @' + new Date(), 3);
+      node.status.connecting = true;
+      node.plc.initiateConnection(node.RFCParam, (err) => {
+        outputLog('[s7comm-Info] - Connection Callback occured', 2);
+        node.status.connecting = false;
+        clearTimer('handleConnectionTimeout');
+
+        if (err) {
+          // On Error
+          outputLog('[s7comm-Error] - Error occured during Connection Establishment.', 0);
+          const myErr = ((typeof (err) === 'object') ? (JSON.stringify(err)) : (err));
+          outputLog('[s7comm-Info] - Err: ' + myErr + ',State: -  ' + printStatus(), 2);
+
+          stopWatchingStates();
+          setStatus('error');
+          node.status.connected = false;
+          onConnectionError();
+          return;
+        }
+        // Connected
+        outputLog('[s7comm-Warning] - Connection established to PLC ' + node.RFCParam.host.toString() + ':' + node.RFCParam.port.toString(), 1);
+        setStatus('connected');
+        node.status.connected = true;
+        startWatchingStates();
+
+        // Trigger single Reading once, because if intervall reading is huge
+        // and we get an external input we get an reading error.
+        outputLog('[s7comm-Info] - Single reading once to init values (PLC ' + node.RFCParam.host.toString() + ').', 2);
+        node.plc.readAllItems((anythingBad, values) => {
+          node.status.reading = false;
+          node.readDataBuffer.anythingBad = anythingBad;
+          node.readDataBuffer.values = values;
+        });
+
+        // Trigger Interval Reading.
+        if (node.status.numOfReadNodes >= 1 && node.status.numOfReadIntervallNodes >= 1) {
+          node.triggerIntervalReading();
+        }
+      });
+    }
+
+    function stopWatchingStates() {
+      outputLog('[s7comm-Function] - stopWatchingStates. Configuration:[' + node.id + '].', 3);
+      node.plc.isoclient.setKeepAlive(false);
+      node.status.keepAliveRunning = false;
+
+      clearTimer('handleConnectionTimeout');
+      clearTimer('handleStateInterval');
+      clearTimer('handleLocalTimeout');
+      clearTimer('readingInterval');
+    }
+
+    function startWatchingStates() {
+      outputLog('[s7comm-Function] - startWatchingStates. Configuration:[' + node.id + '].', 3);
+
+      // set KeepAlive
+      outputLog('[s7comm-Info] - Enable KeepAlive.', 2);
+
+      node.status.keepAliveRunning = true;
+      // Only for process.platform == 'win32'!!
+      // sets TCP_KEEPTIME = 3sec, TCP_KEEPINTVL  = 3sec (windows only!), TCP_KEEPPROBES = ?
+      node.plc.isoclient.setKeepAlive(true, 3000);
+
+      // For process.platform == 'linux' we use module net-keepalive
+      if (NetKeepAlive && node.plc.isoclient) {
+        outputLog('[s7comm-Info] - Set the keepalive parameter for linux system.', 2);
+        // sets TCP_KEEPTIME = 3sec, TCP_KEEPINTVL  = 3sec, TCP_KEEPPROBES = 8
+        const probeInterval = 3000; // after initialDuration send probes every 1 second
+        const maxProbesBeforeFail = 3; // after 10 failed probes connection will be dropped
+        NetKeepAlive.setKeepAliveInterval(node.plc.isoclient, probeInterval);
+        NetKeepAlive.setKeepAliveProbes(node.plc.isoclient, maxProbesBeforeFail);
+      }
+
+      // watch States
+      outputLog('[s7comm-Info] - Start Watching NodeS7 States.', 2);
+      node.status.handleStateInterval = setInterval(() => {
+        if (node.plc.isoConnectionState === 4 && node.status.numOfReadIntervallNodes > 0 && node.status.rwCyclError === true) {
+          // In case of cyclic reading & pull of cable
+          setStatus('error');
+          // Don't set because it also can be a read write Error. We don't know it yet
+          // node.status.connected = false;
+        } else if (node.plc.isoConnectionState === 4) {
+          setStatus('connected');
+        } else {
+          setStatus('disconnected');
+          node.status.connected = false;
+          stopWatchingStates();
+          onConnectionError();
+        }
+      }, 1000);
+    }
+
+    function onConnectionError() {
+      outputLog('[s7comm-Function] - onConnectionError. Configuration:[' + node.id + '].', 3);
+      disconnect(() => {
+        outputLog('[s7comm-Warning] - Reconnection after 3 sec.', 1);
+        node.status.handleConnectionTimeout = setTimeout(() => {
+          clearTimer('handleConnectionTimeout');
+          connect(); // disconnection will be done within connect method
+        }, 3000);
+      });
+    }
+
+    function onNodeClose(cb) {
+      outputLog('[s7comm-Warning] - Closed Node event occured: ' + node.id, 1);
+      outputLog('[s7comm-Function] - onNodeClose. Configuration:[' + node.id + '].', 3);
+      clearTimer('readingInterval');
+
+      stopWatchingStates();
+      setStatus('disconnected');
+      node.status.connected = false;
+
+      // Only Disconnect. No manual reconnection. Will be done by Node-RED
+      disconnect(() => {
+        outputLog('[s7comm-Info] - Disconnection Done. Status: ' + printStatus(), 2);
+        cb();
+      });
+    }
+
+
+    // R/W
+    function singleReading() {
+      outputLog('[s7comm-Function] - singleReading. Configuration:[' + node.id + '].', 3);
+      const nextElem = node.readQueue.shift();
       if (nextElem) {
-        node.reading = true;
-        node.sps.readAllItems(function (anythingBad, values) {
-          node.reading = false;
-          node.readDataBuffer = {
-            'anythingBad': anythingBad,
-            'values': values,
-          };
-          readingComplete(nextElem); // callback routine
-
+        outputLog('[s7comm-Info] - Single reading process (PLC ' + node.RFCParam.host.toString() + ') is starting.', 2);
+        node.status.reading = true;
+        node.plc.readAllItems((anythingBad, values) => {
+          outputLog('[s7comm-Info] - Single reading process (PLC ' + node.RFCParam.host.toString() + ') done. Bad Values:' + anythingBad, 2);
+          node.status.reading = false;
+          node.readDataBuffer.anythingBad = anythingBad;
+          node.readDataBuffer.values = values;
+          node.readingComplete(nextElem);
           singleReading();
         });
-        node.reading = true;
+      } else {
+        outputLog('[s7comm-Info] - Reading Queue empty. Configuration:[' + node.id + '].', 2);
       }
-    };
+    }
 
-    var singleWriting = function () {
-      var nextElem = node.writeQueue.shift();
+    function cyclicReading() {
+      outputLog('[s7comm-Function] - cyclicReading. Configuration:[' + node.id + '].', 3);
+      node.status.reading = true;
+      node.plc.readAllItems((anythingBad, values) => {
+        outputLog('[s7comm-Info] - Iteration of cyclic reading process from PLC ' + node.RFCParam.host.toString() + ' done.', 2);
+        node.status.rwCyclError = anythingBad; // Patch. Can be removed when connection Establishment Issue is solved.
+        node.status.reading = false;
+        node.readDataBuffer.anythingBad = anythingBad;
+        node.readDataBuffer.values = values;
+      });
+    }
+
+    function singleWriting() {
+      outputLog('[s7comm-Function] - singleWriting. Configuration:[' + node.id + '].', 3);
+      const nextElem = node.writeQueue.shift();
       if (nextElem) {
-        node.writing = true;
-        node.sps.writeItems(nextElem.name, nextElem.val, function (cb) {
-          node.writing = false;
+        outputLog('[s7comm-Info] - Writing now.', 2);
 
-		      //send the payload
-		      var myNode = nextElem.node;
-		      var myName = nextElem.name;
-		      var myValue = nextElem.val;
-		      var err = -1;
-		      var value = null;
-		  
-		      if (cb === false) {//the callback from the writing process
-            err = 0;
-		      }
-		      if (myNode.rcvData.S7_Quantity > 1) {
-            if (myNode.rcvData.S7_Datatype == 'STRING' || myNode.rcvData.S7_Datatype == 'CHAR') {
+        node.status.writing = true;
+        const myNode = nextElem.node;
+        const myName = nextElem.name;
+        const myValue = nextElem.val;
+        const myError = nextElem.error;
+        outputLog('[s7comm-Info] - Single writing process (PLC ' + node.RFCParam.host.toString() + ') is starting.', 2);
+
+        node.plc.writeItems(myName, myValue, (cb) => {
+          outputLog('[s7comm-Info] - Single writing process (PLC ' + node.RFCParam.host.toString() + ') done.', 2);
+          node.status.writing = false;
+          // send the payload
+          let err = -1;
+          let value = null;
+
+          if (cb === false) {
+            err = 0;// the callback from the writing process
+          }
+          if (myNode.dataHandle.rcvData.S7_Quantity > 1) {
+            if (myNode.dataHandle.rcvData.S7_Datatype === 'STRING' || myNode.dataHandle.rcvData.S7_Datatype === 'CHAR') {
               value = myValue;
             } else {
               value = myValue[0];
             }
-		      } else {
+          } else {
             value = myValue;
-		      }
-		      myNode.NodeConfig.writeJSON = getJSON('write', myNode, myNode.rcvData.S7_Name, err, value);
-		      myNode.send(myNode.NodeConfig.writeJSON);
-		  
-		      //trigger next writing
-          singleWriting();
-        });
-        node.writing = true;
-      }
-    };
+          }
 
-	  // Functions called by write and read nodes
-    node.register = function (myNode, callback) {
-      outputLog('[node-Info] - Register node:' + myNode.id.toString() + ' (config:' + myNode.NodeConfig.id.toString(), ')', 2);
+          const wrappedPath = wrapData(myNode.dataHandle.rcvData, 'path');
+
+          myNode.NodeConfig.writeJSON = getJSON(myNode, wrappedPath, err, value);
+          myNode.send(myNode.NodeConfig.writeJSON);
+
+          singleWriting();// trigger next writing
+        });
+        // node.status.writing = true;
+      } else {
+        outputLog('[s7comm-Info] - Writing Queue empty. Configuration:[' + node.id + '].', 2);
+      }
+    }
+
+    function checkWritingValue(myNode, val) {
+      // Input:  value.payload={'value':[1]}
+      // Return: val= { error: false, value: [ 2 ] }
+      outputLog('[s7comm-Function] - checkWritingValue. Configuration:[' + node.id + '].', 3);
+      
+      let ret = null;
+      const tmp = [];
+      let err = null;
+      let fatalError = false;
+
+      for (let i = 0; i < val.length; i++) {
+        tmp[i] = val[i];
+        err = false;
+
+        if (myNode.dataHandle.rcvData.S7_Datatype === 'B' || myNode.dataHandle.rcvData.S7_Datatype === 'uint8') { // 0x00 <= Byte <= 255
+          if (val[i] < 0x00) {
+            tmp[i] = 0;
+          } else {
+            tmp[i] = val[i] % (255 + 1);
+          }
+        }
+        if (myNode.dataHandle.rcvData.S7_Datatype === 'W' || myNode.dataHandle.rcvData.S7_Datatype === 'uint16') { // 0x0000 <= Word <= 65535
+          if (val[i] < 0) {
+            tmp[i] = 0;
+          } else {
+            tmp[i] = val[i] % (65535 + 1);
+          }
+        }
+        if (myNode.dataHandle.rcvData.S7_Datatype === 'D' || myNode.dataHandle.rcvData.S7_Datatype === 'uint32') { // 0x00000000 <= DWord <= 4294967295
+          if (val[i] < 0) {
+            tmp[i] = 0;
+          } else {
+            tmp[i] = val[i] % (4294967295 + 1);
+          }
+        }
+        if (myNode.dataHandle.rcvData.S7_Datatype === 'I' || myNode.dataHandle.rcvData.S7_Datatype === 'int16') { // -32768 <= INT <= 32767
+          if (val[i] < 0) {
+            tmp[i] = val[i] % (32768 + 1);
+          } else if (val[i] > 0) {
+            tmp[i] = val[i] % (32767 + 1);
+          } else {
+            tmp[i] = val[i] % (32767 + 1);
+          }
+        }
+        if (myNode.dataHandle.rcvData.S7_Datatype === 'DI' || myNode.dataHandle.rcvData.S7_Datatype === 'int32') { // -2147483648 <= INT <= 2147483647	
+          if (val[i] < 0) {
+            tmp[i] = val[i] % (2147483648 + 1);
+          } else if (val[i] > 0) {
+            tmp[i] = val[i] % (2147483647 + 1);
+          } else {
+            tmp[i] = val[i] % (2147483647 + 1);
+          }
+        }
+        if (myNode.dataHandle.rcvData.S7_Datatype === 'X') {
+          if (typeof (val[i]) !== 'boolean') {
+            fatalError = true;
+          }
+        }
+        if (myNode.dataHandle.rcvData.S7_Datatype === 'CHAR') {
+          let x = '';
+          if (typeof (val[i]) !== 'string') {
+            fatalError = true;
+          } else {
+            if ((val[i]).length > 1) {
+              err = true;
+              x = (val[i]).slice(0, 1);
+            } else {
+              x = val[i];
+            }
+            if (x === '') {
+              tmp[i] = ' ';
+            } else {
+              tmp[i] = x;
+            }
+          }
+        }
+        if (myNode.dataHandle.rcvData.S7_Datatype === 'STRING') {
+          if (typeof (val[i]) !== 'string') {
+            fatalError = true;
+          } else {
+            if ((val[i]).length > myNode.dataHandle.rcvData.S7_Quantity) {
+              err = true;
+              tmp[i] = (val[i]).slice(0, myNode.dataHandle.rcvData.S7_Quantity);
+            }
+          }
+        }
+        if (myNode.dataHandle.rcvData.S7_Datatype === 'R') {
+          if (isNumeric(val[i])) {
+            tmp[i] = val[i];
+          } else {
+            tmp[i] = 0;
+            err = true;
+          }
+        }
+        if (myNode.dataHandle.rcvData.S7_Datatype === 'TIMER') {
+          // TODO: Howto validate value
+        }
+        if (myNode.dataHandle.rcvData.S7_Datatype === 'COUNTER') {
+          // TODO: Howto validate value
+        }
+      }
+      if (fatalError === true) {
+        ret = null;
+      } else {
+        // writingValue is always an array so redefine item
+        if (myNode.dataHandle.rcvData.S7_Quantity > 1) {
+          // cut off the overload of the array
+          if (isNumeric(myNode.dataHandle.rcvData.S7_Quantity)) {
+            ret = {
+              'error': err,
+              'value': [tmp.slice(0, parseInt(myNode.dataHandle.rcvData.S7_Quantity))],
+            };
+            if (myNode.dataHandle.rcvData.S7_Datatype == 'CHAR' || myNode.dataHandle.rcvData.S7_Datatype == 'STRING') {
+              ret = { 'error': err, 'value': tmp };
+            } else {
+              ret = {
+                'error': err,
+                'value': [tmp.slice(0, parseInt(myNode.dataHandle.rcvData.S7_Quantity))],
+              };
+            }
+          } else {
+            // value of Quantity Field is not a number
+            tmp[i] = 0;
+            err = true;
+          }
+        } else {
+          ret = { 'error': err, 'value': tmp };
+        }
+      }
+      return ret;
+    }
+
+    // global methods from r/w node
+    // Register r/w node in list
+    node.register = (myNode, cb) => {
+      outputLog('[s7comm-Function] - register. Node:[' + myNode.id + '].', 3);
       node.users[myNode.id] = myNode;
-      // poll node.user for counting the number of read/write nodes. (readNum==1 => starting readinterval) and for setting  the global reading interval time
-      node.cnt = { 'read': 0, 'write': 0, 'repeatValues_read': [] };
+      outputLog('[s7comm-Function] - configureIntervalReading. Configuration:[' + node.id + '].', 3);
+
+      // Configure interval reading
       for (var i in node.users) {
-        if (node.users[i].type === 's7comm read') { // increase Quantity of nodes with name 'read'
-          node.cnt.read++;
+        if (node.users[i].type === 's7comm write') {
+          node.status.numOfWriteNodes++;// increase Quantity of writing nodes
+        }
+        if (node.users[i].type === 's7comm read') {
+          node.status.numOfReadNodes++;// increase Quantity of nodes with name 'read'
+
           // set interval time
-          if (node.users[i].repeat && !isNaN(node.users[i].repeat) && node.users[i].repeat > 0) {
+          if (node.users[i].nodeTiming.repeat && !isNaN(node.users[i].nodeTiming.repeat) && node.users[i].nodeTiming.repeat > 0) {
             // Repeat choosed !!
-            node.cnt.repeatValues_read.push(node.users[i].repeat);			// get repeat value and push it into an array
-            node.intervalTime = (Array.min(node.cnt.repeatValues_read)) / 2;	// get Array minimum,set it to interval time.
-            if (node.intervalTime < 200) {
-              node.intervalTime = 200;
+            node.status.numOfReadIntervallNodes++
+
+            node.status.readCyclArray.push(node.users[i].nodeTiming.repeat);			      // get repeat value and push it into an array
+            node.status.readIntervalTime = (Array.min(node.status.readCyclArray)) / 2;	// get Array minimum,set it to interval time.
+            if (node.status.readIntervalTime < 200) {
+              node.status.readIntervalTime = 200;
             }
           }
-          if (node.users[i].once) {
-            // Once choosed !!
-          }
-        }
-        if (node.users[i].type === 's7comm write') { // increase Quantity of writing nodes
-          node.cnt.write++;
         }
       }
-      // connect if just one node is available
+
+      // Connect here to prevent connecting when no nodes are in use
       if (Object.keys(node.users).length === 1) {
-        connect();
+        connect(); // connect within s7comm
       }
-      callback();
+      cb();
     };
 
-    node.deregister = function (myNode, done) {
-      outputLog('[node-Info] - Deregister node ' + node.users[myNode.id].id, 2);
+    // Deregister r/w node from list
+    node.deregister = (myNode, cb) => {
+      outputLog('[s7comm-Function] - Deregister. Node:[' + myNode.id + '].', 3);
       delete node.users[myNode.id];
-      return done();
+      return cb();
+    };
 
-		  /*
-		  	if (node.closing) {
-                return done();
-			  }
-            if (Object.keys(node.users).length === 0) {
-				
-			   if (node.client && node.client.connected) {
-                    return node.client.end(done);
-                } else {
-                    node.client.end();
-                    return done();
-                }
+    // trigger the intervall reading process
+    node.triggerIntervalReading = () => {
+      outputLog('[s7comm-Function] - triggerIntervalReading. Node:[' + node.id + '].', 3);
+      outputLog('[s7comm-Info] - Trigger interval reading process of PLC ' + node.RFCParam.host.toString(), 2);
+
+      if (!node.status.connected) {
+        outputLog('[s7comm-Error] - Error during reading process. No Connection to ' + node.RFCParam.host.toString() + '.', 0);
+        // node.readJSON = getJSON(node, null, 1, FilledArray(1, null));
+        // node.send(node.readJSON);
+      } else {
+        // reset
+        if (node.status.readingInterval !== null) {
+          clearTimeout(node.status.readingInterval);
+        }
+        node.status.readingInterval = setInterval(cyclicReading, node.status.readIntervalTime);
+      }
+    };
+
+    // trigger the single reading process
+    node.triggerSingleReading = (myNode) => {
+      outputLog('[s7comm-Function] - triggerSingleReading. Node:[' + myNode.id + '].', 3);
+      outputLog('[s7comm-Info] - Trigger single reading process to PLC ' + myNode.NodeConfig.RFCParam.host.toString(), 2);
+
+      const wrappedPath = wrapData(myNode.dataHandle.rcvData, 'path');
+
+      if (!myNode.NodeConfig.status.connected) {
+        outputLog('[s7comm-Error] - Error during reading process. No Connection to ' + node.RFCParam.host.toString() + '.', 0);
+        /* eslint-disable-next-line */
+        myNode.NodeConfig.readJSON = getJSON(myNode, wrappedPath, 1, FilledArray(myNode.dataHandle.rcvData.S7_Quantity, null));
+        myNode.send(myNode.NodeConfig.readJSON);
+      } else {
+        node.readQueue.push(myNode);
+        if (!node.status.reading) {
+          singleReading();
+        }
+      }
+    };
+
+    // trigger the single reading process
+    node.readingComplete = (myNode) => {
+      outputLog('[s7comm-Function] - readingComplete. Node:[' + myNode.id + '].', 3);
+      const wrappedData = wrapData(myNode.dataHandle.rcvData, 'data');
+      const wrappedPath = wrapData(myNode.dataHandle.rcvData, 'path');
+
+      if (wrappedData === null) {
+        outputLog('[s7comm-Error] - No Signal selected within the reading node. WrappedData:' + wrappedData, 0);
+        /* eslint-disable-next-line */
+        myNode.NodeConfig.readJSON = getJSON(myNode, wrappedPath, -1, FilledArray(myNode.dataHandle.rcvData.S7_Quantity, null));
+        myNode.send(myNode.NodeConfig.readJSON);
+      } else if (Object.keys(myNode.NodeConfig.readDataBuffer).length === 0 && myNode.NodeConfig.readDataBuffer.constructor === Object) {
+        // No Data. Due to no Connection or anything else. This can happen during cyclic reading & No connection
+        outputLog('[s7comm-Error] - No response values from reading request available. Wrong Buffer. ReadDataBuffer:' + myNode.NodeConfig.readDataBuffer, 0);
+        /* eslint-disable-next-line */
+        myNode.NodeConfig.readJSON = getJSON(myNode, wrappedPath, -1, FilledArray(myNode.dataHandle.rcvData.S7_Quantity, null));
+        myNode.send(myNode.NodeConfig.readJSON);
+      } else if (!myNode.NodeConfig.readDataBuffer.values) {
+        // No Data. Due to no Connection or anything else. This can happen during cyclic reading & No connection
+        outputLog('[s7comm-Error] - No response values from reading request available. No Buffer Value. Values:' + myNode.NodeConfig.readDataBuffer, 0);
+        /* eslint-disable-next-line */
+        myNode.NodeConfig.readJSON = getJSON(myNode, wrappedPath, -1, FilledArray(myNode.dataHandle.rcvData.S7_Quantity, null));
+        myNode.send(myNode.NodeConfig.readJSON);
+      } else {
+        outputLog('[s7comm-Info] - Processing Response data of Reading Process.', 2);
+        // Checks the return object of a reading process and sets quality and value in a defined form.
+        // The Node-RED node contains a parameter which represent the return value of an reading process see example.
+        // With obj={anythingBad: false,values:{ 'DB11102,BYTE14.4':[ 3, 2, 97, 98 ]}}
+        // We return for each node {err:0,arr:[ 3, 2, 97, 98 ]}
+        // A response value can either be a decimal value or string 'BAD x' if an Error occured
+        // single Item or Array if the Quantity is >1
+
+        const tmp = { err: -1, arr: [null] };// buffer for receiving val {anythingBad:bool,values: { MB1: 5, MW10: 4, etc }}
+        const data = myNode.NodeConfig.readDataBuffer;
+        const dataBadData = data.anythingBad;
+        const dataValues = data.values[wrappedData];
+
+        if (dataValues !== undefined || dataValues !== null) {
+          if (dataBadData === false) {
+            // no Error
+            tmp.err = 0;
+            tmp.arr = [null];
+            if (!Array.isArray(dataValues)) {
+              tmp.arr = [dataValues];// single value!
+            } else {
+              tmp.arr = dataValues;// array!
             }
-            done();
-		  */
+          } else if (dataBadData === true) {
+            // Error
+            if (!Array.isArray(dataValues)) {
+              tmp.err = 0;
+              // single value!
+              if (dataValues === undefined || (typeof (dataValues) === 'string' && dataValues.search('BAD') === 0)) {
+                tmp.err = -1;
+                tmp.arr = [null];
+              } else {
+                tmp.arr = [dataValues];
+              }
+            }
+            if (Array.isArray(dataValues)) { // array!
+              tmp.err = 0;
+              for (var i in dataValues) {
+                if (dataValues[i] === undefined || (typeof (dataValues[i]) === 'string' && dataValues[i].search('BAD') === 0)) {
+                  tmp.err = -1;
+                  tmp.arr[i] = null;
+                } else {
+                  tmp.arr[i] = dataValues[i];
+                }
+              }
+            }
+          }
+          myNode.NodeConfig.readJSON = getJSON(myNode, wrappedPath, tmp.err, tmp.arr);
+        } else {
+          outputLog('[s7comm-Error] - No response values from reading request available. No Data. Error:' + dataBadData + ',Values:' + dataValues, 0);
+          /* eslint-disable-next-line */
+          myNode.NodeConfig.readJSON = getJSON(myNode, wrappedPath, -1, FilledArray(myNode.dataHandle.rcvData.S7_Quantity, null));
+        }
+        /* eslint-disable-next-line */
+        
+        myNode.send(myNode.NodeConfig.readJSON);
+      }
     };
 
-    node.triggerIntervalReading = function (myNode) {
-      outputLog('[node-Info] - Trigger interval reading process of PLC ' + node.RFCParam.host.toString(), 2);
-      function doCycle(cb) {
-        node.reading = true;
+    // trigger the single writing process
+    node.triggerSingleWriting = (myNode, value) => {
+      outputLog('[s7comm-Function] - triggerSingleWriting. Node:[' + myNode.id + '].', 3);
+      outputLog('[s7comm-Info] - Trigger single writing process to PLC ' + myNode.NodeConfig.RFCParam.host.toString(), 2);
 
-        node.sps.readAllItems(function (anythingBad, values) {
-          node.reading = false;
-          node.readDataBuffer = {
-            'anythingBad': anythingBad,
-            'values': values,
-          };
-        });
-      }
-      if (readingInterval !== null) {
-        clearTimeout(readingInterval);
-      }
-      readingInterval = setInterval(doCycle, node.intervalTime);
-    };
+      const wrappedData = wrapData(myNode.dataHandle.rcvData, 'data');// raw Item
+      const wrappedPath = wrapData(myNode.dataHandle.rcvData, 'path');// formated Item (change format in case quantity >1)
 
-    node.triggerSingleReading = function (myNode) {
-      outputLog('[node-Info] - Trigger single reading process of PLC ' + myNode.NodeConfig.RFCParam.host.toString(), 2);
+      if (!myNode.NodeConfig.status.connected) {
+        outputLog('[s7comm-Error] - Error during writing process. No Connection to ' + node.RFCParam.host.toString() + '.', 0);
+        /* eslint-disable-next-line */
+        myNode.NodeConfig.writeJSON = getJSON(myNode, wrappedPath, 1, FilledArray(1, null));
+        myNode.send(myNode.NodeConfig.writeJSON);
+      } else if (wrappedData === null) {
+        outputLog('[s7comm-Error] - Error during writing process. Invalid Data', 0);
+        /* eslint-disable-next-line */
+        myNode.NodeConfig.writeJSON = getJSON(myNode, wrappedPath, -1, FilledArray(1, null));
+        myNode.send(myNode.NodeConfig.writeJSON);
+      } else if (typeof (value.payload) !== 'object' && value.payload.value) {
+        outputLog('[s7comm-Error] - Error during writing process. Invalid writing Data. Data:' + value.payload, 0);
+        /* eslint-disable-next-line */
+        myNode.NodeConfig.writeJSON = getJSON(myNode, wrappedPath, -1, FilledArray(1, null));
+        myNode.send(myNode.NodeConfig.writeJSON);
+      } else {
+        const val = checkWritingValue(myNode, value.payload.value);
 
-      node.readQueue.push(myNode);
-      if (!node.reading) {
-        singleReading();
-      }
-    };
-
-    node.triggerSingleWriting = function (myNode, value) {
-      outputLog('[node-Info] - Trigger single writing process to PLC ' + myNode.NodeConfig.RFCParam.host.toString(), 2);
-      var val = {};
-
-      // Content from input value has to be : value.payload={'value':[1]}
-      if (myNode.wrappedData !== null && typeof (value.payload) == 'object' && value.payload.value) {
-        val = checkWritingValue(myNode, value.payload.value); // val= { error: false, value: [ 2 ] }
-        // handle error 
-        if (val !== null) {
-          var element = {
+        if (val === null) {
+          outputLog('[s7comm-Error] - Error during writing process. Verified Data is null.', 0);
+          /* eslint-disable-next-line */
+          myNode.NodeConfig.writeJSON = getJSON(myNode, wrappedPath, -1, FilledArray(1, null));
+          myNode.send(myNode.NodeConfig.writeJSON);
+        } else {
+          const element = {
             node: myNode,
-            name: [myNode.wrappedData],
+            name: [wrappedData],
             val: val.value,
             error: val.error,
           };
-          node.writeQueue.push(element);
-          if (!node.writing) {
+          myNode.NodeConfig.writeQueue.push(element);
+          if (!myNode.NodeConfig.status.writing) {
             singleWriting();
-          }	  
-        } else {
-          outputLog('[node-Error] - Error with writing value.', 0);
-          node.writeJSON = getJSON('error', myNode, null, -1, [null]);
-          myNode.send(node.writeJSON);
+          }
         }
-      } else {
-        outputLog('[node-Error] - Error during writing process', 0);
-        node.writeJSON = getJSON('error', myNode, null, -1, [null]);
-        myNode.send(node.writeJSON);
       }
     };
 
-    node.on('close', function (done) {
-      outputLog('[node-Info] - Closed Configuration: ' + node.id, 2);
-      node.closing = true;
-      if (readingInterval !== null) {
-        clearTimeout(readingInterval);
-      }
-
-      if (node.sps.emitter) {
-        node.sps.emitter.removeAllListeners('apiState0');
-        node.sps.emitter.removeAllListeners('apiState1');
-        node.sps.emitter.removeAllListeners('apiState2');
-        node.sps.emitter.removeAllListeners('apiState3');
-        node.sps.emitter.removeAllListeners('apiState4');
-      }
-      if (node.connected) {
-        node.sps.dropConnection(function () {
-          node.connected = false;
-          node.connecting = false;
-          node.reading = false;
-          node.writing = false;
-          done();
-        });
-      } else {
-        done();
-      }
-      for (var id in node.users) {
-        if (node.users.hasOwnProperty(id)) {
-          node.users[id].status({
-            fill: 'red',
-            shape: 'dot',
-            text: 'disconnected',
-          });
-        }
-      }
-    });
+    // on deploy
+    node.on('close', onNodeClose);
   }
-  RED.nodes.registerType('s7comm', S7Configuration);
 
+  RED.nodes.registerType('s7comm', S7Configuration);
 
   function S7Read(n) {
     RED.nodes.createNode(this, n);
@@ -1194,78 +1194,78 @@ module.exports = function (RED) {
     this.name = n.name;
     this.payload = n.payload;
 
-    // parameter for repeating mechanism
-    this.repeat = n.repeat;
-    this.crontab = n.crontab;
-    this.once = n.once;
-    this.none = n.none; // none=true means readTrigger once; none=false means readTrigger in interval
+    this.nodeTiming = {
+      repeat: n.repeat,
+      intervalReading: n.none, // none=true => reading once; none=false means=> interval rading
+      stateIntervalHandle: null,
+      once: n.once,
+      onceDelay: (n.onceDelay || 0.1) * 1000,
+      onceTimeout: null,
+      cronjob: null,
+      crontab: null,
+    };
+
+    this.dataHandle = {
+      rcvData: undefined,
+    };
 
     // local parameter & functions
-    var node = this;
-    node.interval_id = null;
-    node.rcvData = undefined;
-    node.wrappedData = null;	// raw Item 
-    node.wrappedPath = null;	// formated Item (change format in case quantity >1)
+    const node = this;
 
-    node.RW_Error = false;
+    node.repeaterSetup = () => {
+      if (node.nodeTiming.repeat > 2147483) {
+        node.error(RED._('repeat.errors.toolong', node));
+        node.nodeTiming.repeat = 2147483;
+      }
+      if (node.nodeTiming.repeat && !isNaN(node.nodeTiming.repeat) && node.nodeTiming.repeat > 0) {
+        node.nodeTiming.repeat = node.nodeTiming.repeat * 1000;
+        if (RED.settings.verbose) {
+          node.log(RED._('node.repeat', node));
+        }
+        node.nodeTiming.stateIntervalHandle = setInterval(() => {
+          node.emit('input', {});
+        }, node.nodeTiming.repeat);
+      }
+    };
+
+    node.status({ fill: 'red', shape: 'dot', text: 'missing configuration' });
 
     if (node.NodeConfig) {
-      node.status({ fill: 'red', shape: 'dot', text: 'disconnected' });
-
       // Wrap payload and put it into the pollinglist
       if (node.payload !== undefined && node.payload !== '') {
-        node.rcvData = JSON.parse(node.payload);
-        node.wrappedData = wrapData(node.rcvData, 'data');
-        node.wrappedPath = wrapData(node.rcvData, 'path');
-        pollinglist(node, 'add');
+        node.dataHandle.rcvData = JSON.parse(node.payload);
       }
 
-      // interval init
-      if (node.once) {
-        setTimeout(function () {
+      // Set up Timing
+      if (node.nodeTiming.once) {
+        node.nodeTiming.onceTimeout = setTimeout(() => {
           node.emit('input', {});
-        }, 100);
-      }
-      if (node.repeat && !isNaN(node.repeat) && node.repeat > 0) {
-        node.repeat = node.repeat * 1000;
-        if (RED.settings.verbose) {
-          node.log(RED._('inject.repeat', node));
-        }
-        node.interval_id = setInterval(function () {
-          node.emit('input', {});
-        }, node.repeat);
+          node.repeaterSetup();
+        }, node.nodeTiming.onceDelay);
+      } else {
+        node.repeaterSetup();
       }
 
-
-      node.NodeConfig.register(node, function () {
-        node.on('input', function () {
-          if (node.none == 'true') { // singleReading!
-            if (node.NodeConfig.cnt.read >= 1) {
-              node.NodeConfig.triggerSingleReading(node);
-            }
-          } else if (node.none == 'false') { // intervalReading!
-            readingComplete(node);
+      node.NodeConfig.register(node, () => {
+        node.on('input', () => {
+          if (node.nodeTiming.intervalReading === 'true' && node.NodeConfig.status.numOfReadNodes >= 1) {
+            node.NodeConfig.triggerSingleReading(node);
+          } else if (node.nodeTiming.intervalReading === 'false') {
+            node.NodeConfig.readingComplete(node);
           }
         });
       });
 
-      node.on('close', function (done) {
+      node.on('close', (done) => {
+        if (node.nodeTiming.stateIntervalHandle !== null) {
+          clearInterval(node.nodeTiming.stateIntervalHandle);
+        }
+        if (RED.settings.verbose) {
+          node.log(RED._('inject.stopped'));
+        }
         if (node.NodeConfig) {
-          if (this.interval_id !== null) {
-            clearInterval(this.interval_id);
-            if (RED.settings.verbose) {
-              this.log(RED._('inject.stopped'));
-            }
-          }
-          pollinglist(node, 'remove');
           node.NodeConfig.deregister(node, done);
         }
-      });
-    } else {
-      node.status({
-        fill: 'red',
-        shape: 'dot',
-        text: 'missing configuration',
       });
     }
   }
@@ -1284,39 +1284,29 @@ module.exports = function (RED) {
     this.payload = n.payload;
 
     // local parameter & functions
-    var node = this;
-    node.rcvData = undefined;
-    node.wrappedData = null;	// raw Item 
-    node.wrappedPath = null;	// formated Item (change format in case quantity >1)	
+    this.dataHandle = {
+      rcvData: undefined,
+    };
+    const node = this;
 
-    node.RW_Error = false;
-
+    node.status({ fill: 'red', shape: 'dot', text: 'missing configuration' });
     if (node.NodeConfig) {
-      node.status({ fill: 'red', shape: 'dot', text: 'disconnected' });
-
       // Wrap payload
       if (node.payload !== '' && node.payload !== '"undefined"') {
-        node.rcvData = JSON.parse(node.payload);
-        node.wrappedData = wrapData(node.rcvData, 'data');
-        node.wrappedPath = wrapData(node.rcvData, 'path');
+        node.dataHandle.rcvData = JSON.parse(node.payload);
       }
-
-      node.NodeConfig.register(node, function () {
-        node.on('input', function (msg) {
+      node.NodeConfig.register(node, () => {
+        node.on('input', (msg) => {
           node.NodeConfig.triggerSingleWriting(node, msg);
         });
       });
-
-      node.on('close', function (done) {
+      node.on('close', (done) => {
         if (node.NodeConfig) {
+          if (RED.settings.verbose) {
+            this.log(RED._('inject.stopped'));
+          }
           node.NodeConfig.deregister(node, done);
         }
-      });
-    } else {
-      node.status({
-        fill: 'red',
-        shape: 'dot',
-        text: 'missing configuration',
       });
     }
   }

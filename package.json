@@ -1,6 +1,6 @@
 {
     "name": "node-red-contrib-s7comm",
-    "version": "1.1.3",
+    "version": "1.1.4",
     "description": "A Node-RED node to communicate with Siemens S7 PLCs.",
     "main": "s7comm.js",
     "author": {
@@ -24,18 +24,13 @@
         "url": "https://github.com/Hilscher/node-red-contrib-s7comm"
     },
     "dependencies": {
-        "nodes7": "0.2.5"
+        "nodes7": "0.3.1",
+        "colors": "1.3.2"
     },
-    "devDependencies": {
-        "eslint-config-airbnb": "^13.0.0",
-        "eslint-config-airbnb-base": "^12.0.0",
-        "eslint-plugin-import": "^2.7.0",
-        "eslint-plugin-jsx-a11y": "^5.1.1",
-        "eslint-plugin-react": "^7.1.0",
-        "gulp": "^3.9.1",
-        "gulp-eslint": "^4.0.0",
-        "run-sequence": "^1.2.2"
+    "optionalDependencies ": {
+        "net-keepalive": "1.2.1"
     },
+    "devDependencies": {},
     "keywords": [
         "node-red",
         "SIMATIC",

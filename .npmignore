@@ -1,3 +1,13 @@
 # ignore all files in the image directory
 /images
+.vscode
+.svn
+test/
+node_modules/
+
+# ignore files
+.eslintrc.json
+s7comm.code-workspace
+gulpfile.js
+readme.txt
 

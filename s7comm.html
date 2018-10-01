@@ -27,7 +27,7 @@ A Node-RED node to communicate with Siemens S7 PLCs.
 </style>
 
 <!--******************************************************************-->
-<!--  	     global functions to create a List within selectBox	      -->
+<!--  	     					helper     							  -->
 <!--******************************************************************-->
 <script type="text/javascript">
 
@@ -64,7 +64,7 @@ function ValidateIPV4address  (ipaddress) {
 
 	<!-- Element: Intervall -->
 	<div class="form-row">
-		<!-- <label for=""><i class="fa fa-repeat"></i> <span data-i18n="inject.label.repeat"></span></label> -->  <!--  TODO: this is not working properly. check why -->
+		<!-- <label for=""><i class="fa fa-repeat"></i> <span data-i18n="inject.label.repeat"></span></label> -->
         <label for=""><i class="fa fa-repeat"></i> <span>Repeat</span></label>
         <select id="inject-time-type-select" style="width: 70%">
             <option value="none">none</option>
@@ -106,6 +106,8 @@ function ValidateIPV4address  (ipaddress) {
 <p>The node reads data from Siemens devices such as S7-300/400/1200/1500.</p>
 <p>The signals to be read are setup in the node's connection selector. The repeat function allows sending 
 requests either periodically or if disabled triggered by any node's input message.
+</br>
+</br>
 The node outputs a msg.payload in the following format:</p>
 <p style="padding-left: 10px;"><b>payload.signal :</b> Symbolic name of the signal as configured,</p>
 <p style="padding-left: 10px;"><b>payload.path :</b> Signal path of the signal,</p>
@@ -114,7 +116,14 @@ The node outputs a msg.payload in the following format:</p>
 <p style="padding-left: 30px;"><em>null</em>: in case of an error;</p>
 <p style="padding-left: 30px;"><em>single value</em>: if the quantity equals to one;</p>
 <p style="padding-left: 30px;"><em>array of values</em>: if the quantity is larger than one;</p>
-</br></br>
+</br>
+Node status:</p>
+<p style="padding-left: 10px;"><b>connected :</b> The node is connected with a PLC.</p>
+<p style="padding-left: 10px;"><b>disconnected :</b> The node is disconnected.</p>
+<p style="padding-left: 10px;"><b>error :</b> Some Error occured.</p>
+<p style="padding-left: 10px;">Note: The node status connected and disconnected corresponds to the internal state of nodes7 (isoConnectionState). The node status error corresponds to the return value of a read request.
+</br>
+</br>
 Example payload of output msg:</br>
 1) Reading Q0.1, return value is true and valid:</br>
 <div style="padding-left: 17px;"> {topic:"Input_hall#1", payload:{signal: "machine#1", path:"Q0.1",error:0, value:[true] }, _msgid: "92e3f0cc.6d1c1"} </div></br>
@@ -332,7 +341,14 @@ input a message with msg.payload <em>value</em> as JSON object of type array:</p
 <p style="padding-left: 17px;"><b>payload.path :</b> Signal path of the signal,</p>
 <p style="padding-left: 17px;"><b>payload.error :</b> Error value: 0 = no error, -1 = writing failed,</p>
 <p style="padding-left: 17px;"><b>payload.value :</b> Value to be written</p>
-</br></br>
+</br>
+Node status:</p>
+<p style="padding-left: 10px;"><b>connected :</b> The node is connected with a PLC.</p>
+<p style="padding-left: 10px;"><b>disconnected :</b> The node is disconnected.</p>
+<p style="padding-left: 10px;"><b>error :</b> Some Error occured.</p>
+<p style="padding-left: 10px;">Note: The node status connected and disconnected corresponds to the internal state of nodes7 (isoConnectionState). The node status error corresponds to the return value of a read request.
+</br>
+</br>
 Example payload of output msg:</br>
 1) Writing true to I0.3, writing succeeded, Error equals to 0:</br>
 <div style="padding-left: 17px;">{topic:"Input_hall#1", payload:{signal: "machine#1", path:"I0.3",error:0, value:[true] }, "_msgid": "92e3f0cc.6d1c1"} </div></br>
@@ -356,7 +372,6 @@ RED.nodes.registerType('s7comm write',
 			//topic: {value:"",validate: RED.validators.regex(/^(#$|(\+|[^+#]*)(\/(\+|[^+#]*))*(\/(\+|#|[^+#]*))?$)/)},
 			name: {value:""},
 			signalSetted: {value:false},
-			//property:{value:""}
 		},
 		inputs:1,
         outputs:1,
@@ -479,8 +494,8 @@ RED.nodes.registerType('s7comm write',
 				,{v:"DB",t:"Datablock"}
 				,{v:"T",t:"Timer"}
 				,{v:"C",t:"Counter"}
-				//,{v:"PI",t:"Peripheral Input"} // commented out because not Tested
-				//,{v:"PQ",t:"Peripheral Output"} // commented out because not Tested
+				//,{v:"PI",t:"Peripheral Input"}
+				//,{v:"PQ",t:"Peripheral Output"}
 			];
 			var operators2 = [
 				{v:"X",t:"Bit"}

@@ -2,7 +2,8 @@
 ## Overview
 
  - [Function of the S7comm node](#Function)
- - [configuration node](#configuration)
+ - [Node Status](#Status)
+ - [Configuration node](#Configuration)
  - [Read node](#read)
  - [Write node](#write)
  - [JSON structures](#JSON)
@@ -23,7 +24,25 @@ The S7comm-Write node writes a value to the memory of an PLC. The Value is provi
 
 ![alt text](images/example_writeFlow02.png)
 
-## <a name="configuration"></a> configuration node
+## <a name="Status"></a> Node Status
+-----------
+
+- green: connected
+    
+    The node is connected with a PLC.
+
+- red: disconnected
+    
+    The node is disconnected.
+
+- red: error
+    
+    Some Error occured.
+
+    Note: The node status connected and disconnected corresponds to the internal state of nodes7 (isoConnectionState). The node status error corresponds to the return value of a read request.
+
+
+## <a name="Configuration"></a> Configuration node
 -----------
 To parametrise the configuration node you have to insert either a S7comm-Read or a S7comm-Write node into the Node-RED editor by dragging it from the list on the left hand side and drop it onto the editor window.
 

@@ -1,19 +1,11 @@
-# ignore VSCode & SVN config files.
+# ignore directories
 .vscode
 .svn
-
-# ignore all files in the test/ directory
 test/
+node_modules/
 
-# ignore ESlint configuration
+# ignore files
 .eslintrc.json
-
-# ignore gulpscript
+s7comm.code-workspace.json
 gulpfile.js
-
-# ignore text files
-lint-report.txt
 readme.txt
-
-# ignore nodes7 patch
-nodeS7_V0.2.5_patch.js
