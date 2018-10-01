@@ -1,0 +1,10 @@
+{
+  "logLevelNodeS7": {
+    "debug": 0,
+    "silent": true
+  },
+  "logLevelNodeRED": {
+    "debug": 2,
+    "silent": true
+  }
+}

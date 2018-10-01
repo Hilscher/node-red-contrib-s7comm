@@ -7,5 +7,6 @@ node_modules/
 # ignore files
 .eslintrc.json
 s7comm.code-workspace.json
+package-lock.json
 gulpfile.js
 readme.txt

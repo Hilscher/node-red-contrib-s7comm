@@ -1,13 +1,12 @@
-# ignore all files in the image directory
-/images
+# ignore directories
 .vscode
 .svn
 test/
 node_modules/
-
+images/
 # ignore files
 .eslintrc.json
 s7comm.code-workspace
+package-lock.json
 gulpfile.js
 readme.txt
-
